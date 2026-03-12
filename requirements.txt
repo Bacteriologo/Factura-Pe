@@ -3,7 +3,7 @@ uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 lxml==5.2.1
 signxml==4.0.1
-cryptography==41.0.7
+cryptography==43.0.0
 pyOpenSSL==24.0.0
 zeep==4.2.1
 python-dotenv==1.0.1
