@@ -1,0 +1,11 @@
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+lxml==5.1.0
+signxml==3.2.2
+cryptography==42.0.2
+zeep==4.2.1
+reportlab==4.0.9
+qrcode[pil]==7.4.2
+python-dotenv==1.0.1
+supabase==2.3.4
