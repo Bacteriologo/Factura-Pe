@@ -9,6 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600&display=swap" rel="stylesheet">
 <!-- Supabase JS -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- jsPDF para generación de PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<!-- QRCode para código QR en PDF -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --navy:#060E1F;--navy2:#0A1628;--navy3:#0D1B3E;
@@ -541,6 +545,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <button class="fp on" onclick="setHF(this,'TODOS')">TODOS</button>
         <button class="fp" onclick="setHF(this,'BOLETA')">🧾 Boletas</button>
         <button class="fp" onclick="setHF(this,'FACTURA')">📄 Facturas</button>
+        <button class="fp" onclick="setHF(this,'NOTA_CREDITO')">📝 N. Crédito</button>
         <button class="fp" onclick="setHF(this,'ACEPTADO')">✓ Aceptados</button>
         <button class="fp" onclick="setHF(this,'RECHAZADO')">✕ Rechazados</button>
       </div>
@@ -743,6 +748,38 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   </div>
 </div>
 
+<!-- MODAL: NOTA DE CRÉDITO -->
+<div class="ov" id="ov-nc">
+  <div class="modal"><div class="mh"></div>
+    <div class="mt2">📝 Nota de Crédito</div>
+    <div class="ms2">Anular o corregir un comprobante emitido</div>
+    <div class="card" id="nc-ref"></div>
+    <div class="fg">
+      <label class="flbl">Motivo de la Nota de Crédito</label>
+      <select class="fsel" id="nc-motivo">
+        <option value="01">01 - Anulación de la operación</option>
+        <option value="02">02 - Anulación por error en el RUC</option>
+        <option value="03">03 - Corrección por error en la descripción</option>
+        <option value="04">04 - Descuento global</option>
+        <option value="05">05 - Descuento por ítem</option>
+        <option value="06">06 - Devolución total</option>
+        <option value="07">07 - Devolución parcial</option>
+        <option value="08">08 - Bonificación</option>
+        <option value="09">09 - Disminución en el valor</option>
+        <option value="10">10 - Otros conceptos</option>
+      </select>
+    </div>
+    <div class="fg">
+      <label class="flbl">Descripción (opcional)</label>
+      <input class="fi" id="nc-desc" placeholder="Detalle del motivo...">
+    </div>
+    <div class="mf">
+      <button class="btn bs fw" onclick="closeOv('ov-nc')">Cancelar</button>
+      <button class="btn bd fw" id="btn-nc" onclick="emitNC()">📝 Emitir NC</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -755,8 +792,7 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 // ═══════════════════════════════════════════
 //  BACKEND API CONFIG
 // ═══════════════════════════════════════════
-// IMPORTANTE: Cambia esto por la URL de tu backend en Railway
-const BACKEND_URL = 'http://localhost:8000'; // Cambiar a: https://tu-backend.railway.app
+const BACKEND_URL = 'https://factura-pe-production.up.railway.app';
 const { createClient } = supabase;
 const db = createClient(SB_URL, SB_KEY);
 
@@ -803,6 +839,7 @@ CREATE TABLE IF NOT EXISTS comprobantes (
   pago TEXT DEFAULT 'EF',
   cdr_hash TEXT,
   wa_cliente TEXT,
+  ref_numero TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 
@@ -1235,9 +1272,50 @@ function bStep(n){
   document.getElementById('s-bill').scrollTop=0;
 }
 
-function getCliente(){ const dni=document.getElementById('dni')?.value; const raz=document.getElementById('razon')?.value; return raz||( dni?.length>=8?'Cliente Final':'Cliente Final'); }
-function lookDni(){ const v=document.getElementById('dni').value,r=document.getElementById('dr'); if(v.length<8){r.textContent='Sin DNI → "Cliente Final"';r.style.color='var(--g600)';return;} r.textContent='⟳ Consultando RENIEC...';r.style.color='var(--g600)'; setTimeout(()=>{r.textContent='✓ María García López';r.style.color='var(--teal)';},900); }
-function lookRuc(){ const v=document.getElementById('ruc-cl').value; if(v.length<11){toast('Ingresa 11 dígitos');return;} setTimeout(()=>{sv('razon','Corporación Lima SAC');sv('dir-cl','Av. Larco 1301, Miraflores');toast('✓ RUC encontrado');},900); }
+function getCliente(){ const raz=document.getElementById('razon')?.value; const dni=document.getElementById('dni')?.value; const dr=document.getElementById('dr'); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; return 'Cliente Final'; }
+
+async function lookDni(){
+  const v=document.getElementById('dni').value.trim(), r=document.getElementById('dr');
+  if(v.length<8){ r.textContent='Sin DNI → "Cliente Final"'; r.style.color='var(--g600)'; r.dataset.nombre=''; return; }
+  r.textContent='⟳ Consultando RENIEC...'; r.style.color='var(--g600)';
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/consulta-dni/${v}`);
+    const data = await resp.json();
+    if(data.ok && data.nombre){
+      r.textContent=`✓ ${data.nombre}`;
+      r.style.color='var(--teal)';
+      r.dataset.nombre=data.nombre;
+    } else {
+      r.textContent='⚠️ DNI no encontrado — se usará "Cliente Final"';
+      r.style.color='var(--warn)';
+      r.dataset.nombre='';
+    }
+  } catch(e){
+    // Fallback offline: usar como "Cliente con DNI"
+    r.textContent=`DNI: ${v} (sin verificar — backend no disponible)`;
+    r.style.color='var(--gold)';
+    r.dataset.nombre='';
+  }
+}
+
+async function lookRuc(){
+  const v=document.getElementById('ruc-cl').value.trim();
+  if(v.length<11){ toast('Ingresa 11 dígitos'); return; }
+  toast('⟳ Consultando SUNAT...');
+  try {
+    const resp = await fetch(`${BACKEND_URL}/api/consulta-ruc/${v}`);
+    const data = await resp.json();
+    if(data.ok && data.razon_social){
+      sv('razon', data.razon_social);
+      sv('dir-cl', data.direccion || '');
+      toast(`✓ ${data.razon_social}`);
+    } else {
+      toast('⚠️ RUC no encontrado');
+    }
+  } catch(e){
+    toast('⚠️ Error consultando RUC — verifica el backend');
+  }
+}
 
 function fProds(q){ const d=document.getElementById('pd'); if(!q){d.style.display='none';return;} const r=PRODS.filter(p=>p.name.toLowerCase().includes(q.toLowerCase())||(p.code||'').toUpperCase().includes(q.toUpperCase())); d.innerHTML=r.length===0?'<div style="padding:13px;color:var(--g600);font-size:13px;text-align:center">Sin resultados</div>':r.map(p=>`<div class="dopt" onmousedown="addP('${p.id}')"><div><div class="dn2">${p.name}</div><div class="ds2">${p.code} · Stock: ${p.stock}</div></div><div class="dp">S/${parseFloat(p.price).toFixed(2)}</div></div>`).join(''); d.style.display=''; }
 function sDrop(){ document.getElementById('pd').style.display=''; }
@@ -1247,7 +1325,7 @@ function addP(id){ const p=PRODS.find(x=>x.id==id); if(!p) return; const ex=ST.c
 function updQ(id,d){ const it=ST.cart.find(i=>i.id==id); if(!it) return; it.qty=Math.max(1,it.qty+d); renderCart(); }
 function remI(id){ ST.cart=ST.cart.filter(i=>i.id!=id); renderCart(); }
 function clrCart(){ ST.cart=[]; renderCart(); }
-function tots(){ const sub=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0); return {sub,igv:sub*.18,total:sub*1.18,base:sub/1.18}; }
+function tots(){ const total=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0); const base=total/1.18; const igv=total-base; return {sub:base,igv,total,base}; }
 function renderCart(){
   const n=ST.cart.reduce((s,i)=>s+i.qty,0);
   const cc=document.getElementById('ccnt'); if(cc) cc.textContent=n?`(${n})`:'';
@@ -1353,6 +1431,7 @@ async function emitDoc(){
         pago:ST.pay, 
         cdr_hash:result.cdr_hash,
         wa_cliente:waCl,
+        ruc_cliente:clienteDoc || '',
       };
       
       const saved = await saveDoc(row);
@@ -1414,13 +1493,241 @@ function resetBill(){
   closeOv('ov-ok'); 
   ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null;
   ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2'].forEach(id=>sv(id,''));
-  document.getElementById('dr').textContent='Sin DNI → "Cliente Final"';
+  const dr=document.getElementById('dr');
+  if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; }
   bStep(0); setDT('BOLETA'); renderCart();
-  goTo('s-bill','bill'); // Volver al panel de emisión en Step 0
+  goTo('s-bill','bill');
 }
-function openPDF(){ toast('📄 Generando PDF...'); setTimeout(()=>toast('PDF listo'),1200); }
-function sharePDF(){ if(navigator.share){navigator.share({title:'Comprobante '+ST.last?.numero,text:'FacturaPe',url:window.location.href}).catch(()=>{});}else{toast('Compartir no disponible en este navegador');} }
-function printDoc(){ window.print(); }
+
+// ═══════════════════════════════════════════
+//  PDF GENERATION (jsPDF + QR)
+// ═══════════════════════════════════════════
+function generarPDF(doc){
+  if(!doc){ toast('⚠️ No hay comprobante para generar PDF'); return null; }
+  
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ unit:'mm', format:'a4' });
+  
+  const total = parseFloat(doc.total||0);
+  const base = total/1.18;
+  const igv = total - base;
+  const items = doc.items || [];
+  
+  // ── Header empresa ──
+  pdf.setFillColor(6, 14, 31);
+  pdf.rect(0, 0, 210, 38, 'F');
+  
+  pdf.setTextColor(0, 201, 167);
+  pdf.setFont('helvetica','bold');
+  pdf.setFontSize(20);
+  pdf.text('FacturaPe', 15, 16);
+  
+  pdf.setTextColor(232, 238, 248);
+  pdf.setFontSize(10);
+  pdf.text(CFG.nom || 'MI EMPRESA', 15, 24);
+  pdf.setFontSize(8);
+  pdf.setTextColor(143, 160, 188);
+  pdf.text(`RUC: ${CFG.ruc || '—'}  |  ${CFG.dir || '—'}`, 15, 30);
+  
+  // ── Tipo y número ──
+  pdf.setTextColor(6, 14, 31);
+  pdf.setFillColor(0, 201, 167);
+  pdf.roundedRect(125, 8, 72, 22, 3, 3, 'F');
+  pdf.setTextColor(6, 14, 31);
+  pdf.setFont('helvetica','bold');
+  pdf.setFontSize(12);
+  pdf.text(doc.tipo || 'BOLETA', 161, 16, {align:'center'});
+  pdf.setFontSize(10);
+  pdf.text(doc.numero || '—', 161, 24, {align:'center'});
+  
+  // ── Datos del comprobante ──
+  let y = 48;
+  pdf.setTextColor(100, 100, 100);
+  pdf.setFont('helvetica','normal');
+  pdf.setFontSize(9);
+  
+  const fecha = doc.fecha ? new Date(doc.fecha).toLocaleDateString('es-PE',{day:'2-digit',month:'2-digit',year:'numeric'}) : new Date().toLocaleDateString('es-PE');
+  const hora = doc.fecha ? new Date(doc.fecha).toLocaleTimeString('es-PE',{hour:'2-digit',minute:'2-digit'}) : new Date().toLocaleTimeString('es-PE');
+  
+  pdf.text(`Fecha de emisión: ${fecha}  ${hora}`, 15, y);
+  y += 6;
+  pdf.text(`Cliente: ${doc.cliente || 'Cliente Final'}`, 15, y);
+  y += 6;
+  if(doc.ruc_cliente) pdf.text(`Doc. cliente: ${doc.ruc_cliente}`, 15, y);
+  y += 6;
+  const pn = {EF:'Efectivo',TC:'Tarjeta',YP:'Yape',PL:'Plin'};
+  pdf.text(`Forma de pago: ${pn[doc.pago] || doc.pago || 'Efectivo'}`, 15, y);
+  y += 10;
+  
+  // ── Tabla de items ──
+  pdf.setFillColor(240, 242, 245);
+  pdf.rect(15, y, 180, 8, 'F');
+  pdf.setFont('helvetica','bold');
+  pdf.setFontSize(8);
+  pdf.setTextColor(60, 60, 60);
+  pdf.text('CANT.', 18, y+5.5);
+  pdf.text('DESCRIPCIÓN', 35, y+5.5);
+  pdf.text('P.UNIT', 140, y+5.5);
+  pdf.text('IMPORTE', 170, y+5.5);
+  y += 10;
+  
+  pdf.setFont('helvetica','normal');
+  pdf.setTextColor(30, 30, 30);
+  items.forEach(item => {
+    if(y > 250){ pdf.addPage(); y = 20; }
+    const qty = item.qty || 1;
+    const price = parseFloat(item.price) || 0;
+    const importe = qty * price;
+    pdf.text(String(qty), 20, y);
+    pdf.text((item.name||'Producto').substring(0, 50), 35, y);
+    pdf.text(`S/${price.toFixed(2)}`, 140, y);
+    pdf.text(`S/${importe.toFixed(2)}`, 170, y);
+    y += 6;
+  });
+  
+  // ── Línea separadora ──
+  y += 2;
+  pdf.setDrawColor(200, 200, 200);
+  pdf.line(15, y, 195, y);
+  y += 6;
+  
+  // ── Totales ──
+  pdf.setFont('helvetica','normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(100, 100, 100);
+  pdf.text('Op. Gravada:', 130, y); pdf.text(`S/ ${base.toFixed(2)}`, 170, y); y += 5;
+  pdf.text('IGV (18%):', 130, y); pdf.text(`S/ ${igv.toFixed(2)}`, 170, y); y += 5;
+  
+  pdf.setDrawColor(0, 201, 167);
+  pdf.setLineWidth(0.5);
+  pdf.line(130, y, 195, y); y += 5;
+  
+  pdf.setFont('helvetica','bold');
+  pdf.setFontSize(12);
+  pdf.setTextColor(6, 14, 31);
+  pdf.text('TOTAL:', 130, y);
+  pdf.text(`S/ ${total.toFixed(2)}`, 170, y);
+  y += 8;
+  
+  // ── Estado SUNAT ──
+  if(doc.estado === 'ACEPTADO' || doc.cdr_hash){
+    pdf.setFillColor(230, 255, 240);
+    pdf.roundedRect(15, y, 100, 12, 2, 2, 'F');
+    pdf.setTextColor(0, 160, 80);
+    pdf.setFontSize(9);
+    pdf.setFont('helvetica','bold');
+    pdf.text('✓ ACEPTADO POR SUNAT', 20, y+8);
+    if(doc.cdr_hash){
+      y += 14;
+      pdf.setFontSize(7);
+      pdf.setTextColor(120, 120, 120);
+      pdf.setFont('helvetica','normal');
+      pdf.text(`CDR Hash: ${doc.cdr_hash}`, 15, y);
+    }
+  }
+  
+  // ── QR Code ──
+  try {
+    const qrUrl = `https://www.sunat.gob.pe/ol-ti-itconsultaunificada/consulta/getGre?num=${doc.numero||''}`;
+    // Crear QR temporal
+    const qrDiv = document.createElement('div');
+    qrDiv.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+    document.body.appendChild(qrDiv);
+    const qr = new QRCode(qrDiv, { text: `${CFG.ruc}|${doc.tipo==='FACTURA'?'01':'03'}|${doc.numero}|${igv.toFixed(2)}|${total.toFixed(2)}|${fecha}|${doc.ruc_cliente||'-'}|`, width: 120, height: 120 });
+    
+    setTimeout(() => {
+      try {
+        const canvas = qrDiv.querySelector('canvas');
+        if(canvas){
+          const qrData = canvas.toDataURL('image/png');
+          const qrY = Math.min(y + 10, 240);
+          pdf.addImage(qrData, 'PNG', 15, qrY, 28, 28);
+          pdf.setFontSize(7);
+          pdf.setTextColor(120, 120, 120);
+          pdf.text('Consulta en SUNAT', 15, qrY + 31);
+        }
+      } catch(e){ console.log('QR render skip:', e); }
+      document.body.removeChild(qrDiv);
+    }, 100);
+  } catch(e){ console.log('QR skip:', e); }
+  
+  // ── Footer ──
+  pdf.setFontSize(7);
+  pdf.setTextColor(150, 150, 150);
+  pdf.text('Representación impresa del comprobante electrónico', 105, 285, {align:'center'});
+  pdf.text(`Emitido por FacturaPe · ${new Date().toLocaleDateString('es-PE')}`, 105, 289, {align:'center'});
+  
+  return pdf;
+}
+
+function openPDF(){
+  const doc = ST.last;
+  if(!doc){ toast('⚠️ No hay comprobante reciente'); return; }
+  toast('📄 Generando PDF...');
+  
+  setTimeout(() => {
+    try {
+      const pdf = generarPDF(doc);
+      if(pdf){
+        // Esperar al QR
+        setTimeout(() => {
+          const filename = `${(doc.tipo||'BOL').substring(0,3)}_${(doc.numero||'000').replace(/[-\/]/g,'_')}.pdf`;
+          pdf.save(filename);
+          toast('✓ PDF descargado');
+        }, 300);
+      }
+    } catch(e){
+      console.error('Error PDF:', e);
+      toast('✗ Error generando PDF');
+    }
+  }, 200);
+}
+
+function sharePDF(){
+  const doc = ST.last;
+  if(!doc){ toast('⚠️ No hay comprobante reciente'); return; }
+  
+  try {
+    const pdf = generarPDF(doc);
+    if(!pdf){ return; }
+    
+    setTimeout(async () => {
+      const filename = `${(doc.tipo||'BOL').substring(0,3)}_${(doc.numero||'000').replace(/[-\/]/g,'_')}.pdf`;
+      const blob = pdf.output('blob');
+      const file = new File([blob], filename, { type: 'application/pdf' });
+      
+      if(navigator.share && navigator.canShare && navigator.canShare({ files: [file] })){
+        await navigator.share({ title: `Comprobante ${doc.numero}`, files: [file] });
+      } else if(navigator.share){
+        await navigator.share({ title: `Comprobante ${doc.numero}`, text: `Comprobante ${doc.tipo} ${doc.numero} por S/${parseFloat(doc.total).toFixed(2)}`, url: window.location.href });
+      } else {
+        // Fallback: descargar
+        pdf.save(filename);
+        toast('Compartir no disponible — PDF descargado');
+      }
+    }, 300);
+  } catch(e){
+    toast('⚠️ Error al compartir');
+  }
+}
+
+function printDoc(){
+  const doc = ST.last;
+  if(!doc){ window.print(); return; }
+  
+  try {
+    const pdf = generarPDF(doc);
+    if(pdf){
+      setTimeout(() => {
+        const blob = pdf.output('blob');
+        const url = URL.createObjectURL(blob);
+        const w = window.open(url);
+        if(w){ setTimeout(() => { w.print(); }, 500); }
+        else { toast('Permite ventanas emergentes para imprimir'); }
+      }, 300);
+    }
+  } catch(e){ window.print(); }
+}
 
 // ═══════════════════════════════════════════
 //  CATALOG
@@ -1456,13 +1763,20 @@ function renderHist(){
 }
 function openDet(id){
   const d=DOCS.find(x=>x.id==id); if(!d) return;
-  const tot=parseFloat(d.total||0); const igv=tot*.18/1.18; const base=tot-igv;
+  const tot=parseFloat(d.total||0); const igv=tot-tot/1.18; const base=tot/1.18;
+  const esNC = d.tipo === 'NOTA_CREDITO';
   document.getElementById('det-in').innerHTML=
-    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':'📄'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
-    `<div class="card"><div class="ir"><span class="il">Cliente</span><span class="iv">${d.cliente||'—'}</span></div><div class="ir"><span class="il">Ítems</span><span class="iv">${d.items_count||0}</span></div><div class="ir"><span class="il">Pago</span><span class="iv">${d.pago||'—'}</span></div><div class="div"></div><div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div><div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div><div class="div"></div><div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:var(--teal)">S/ ${tot.toFixed(2)}</span></div></div>`+
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':'📝'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
+    `<div class="card"><div class="ir"><span class="il">Cliente</span><span class="iv">${d.cliente||'—'}</span></div><div class="ir"><span class="il">Ítems</span><span class="iv">${d.items_count||0}</span></div><div class="ir"><span class="il">Pago</span><span class="iv">${d.pago||'—'}</span></div>${d.ref_numero?`<div class="ir"><span class="il">Ref. Original</span><span class="iv">${d.ref_numero}</span></div>`:''}<div class="div"></div><div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div><div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div><div class="div"></div><div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:var(--teal)">S/ ${tot.toFixed(2)}</span></div></div>`+
     (d.cdr_hash?`<div class="ok-bx" style="font-size:12px"><span style="color:var(--g600)">CDR Hash:</span> <span style="color:var(--ok);font-weight:600">${d.cdr_hash}</span></div>`:'')+
-    `<div style="display:flex;gap:6px"><button class="btn bs fw btn-sm" onclick="openPDF()">📄 PDF</button><button class="btn bs fw btn-sm">📥 XML</button></div>`;
+    `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn bs fw btn-sm" onclick="downloadHistPDF('${d.id}')">📄 PDF</button><button class="btn bs fw btn-sm" onclick="closeOv('ov-det')">📥 XML</button>${!esNC && d.estado==='ACEPTADO'?`<button class="btn bd fw btn-sm" onclick="closeOv('ov-det');iniciarNC('${d.id}')">📝 Nota Crédito</button>`:''}</div>`;
   openOv('ov-det');
+}
+
+function downloadHistPDF(id){
+  const d=DOCS.find(x=>x.id==id); if(!d) return;
+  ST.last = d;
+  openPDF();
 }
 function expCSV(){
   const rows=[['Numero','Tipo','Fecha','Cliente','Total','IGV','Estado','Pago']];
@@ -1482,6 +1796,107 @@ document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{ if(e
 let _tt;
 function toast(msg, duration=2800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), duration); }
 function copySql(){ navigator.clipboard.writeText(SETUP_SQL).then(()=>toast('✓ SQL copiado')).catch(()=>toast('Copia el SQL manualmente')); }
+
+// ═══════════════════════════════════════════
+//  NOTA DE CRÉDITO
+// ═══════════════════════════════════════════
+let NC_REF = null; // Comprobante de referencia
+
+function iniciarNC(id){
+  const d = DOCS.find(x=>x.id==id);
+  if(!d){ toast('⚠️ Comprobante no encontrado'); return; }
+  NC_REF = d;
+  const tot = parseFloat(d.total||0);
+  document.getElementById('nc-ref').innerHTML = 
+    `<div class="ir"><span class="il">Comprobante original</span><span class="iv" style="color:var(--teal);font-weight:600">${d.numero}</span></div>`+
+    `<div class="ir"><span class="il">Tipo</span><span class="iv">${d.tipo}</span></div>`+
+    `<div class="ir"><span class="il">Cliente</span><span class="iv">${d.cliente||'—'}</span></div>`+
+    `<div class="ir"><span class="il">Total</span><span class="iv" style="font-family:Syne,sans-serif;font-weight:700;color:var(--teal)">S/ ${tot.toFixed(2)}</span></div>`;
+  sv('nc-desc','');
+  document.getElementById('nc-motivo').value = '01';
+  openOv('ov-nc');
+}
+
+async function emitNC(){
+  if(!NC_REF){ toast('⚠️ Sin comprobante de referencia'); return; }
+  
+  const btn = document.getElementById('btn-nc');
+  btn.innerHTML = '<span class="spin">⟳</span> Enviando...'; btn.disabled = true;
+  
+  const motivo = document.getElementById('nc-motivo').value;
+  const motivoTexto = document.getElementById('nc-motivo').selectedOptions[0]?.text || motivo;
+  const descripcion = gv('nc-desc') || motivoTexto;
+  const total = parseFloat(NC_REF.total||0);
+  const ns = String(CFG.nnc).padStart(8,'0');
+  
+  try {
+    const formData = new FormData();
+    formData.append('empresa_id', USER.id);
+    formData.append('ruc_emisor', CFG.ruc);
+    formData.append('usuario_sol', CFG.su);
+    formData.append('clave_sol', CFG.sp);
+    formData.append('ambiente', CFG.env);
+    formData.append('tipo', 'NOTA_CREDITO');
+    formData.append('serie', CFG.snc);
+    formData.append('numero', CFG.nnc);
+    formData.append('nombre_emisor', CFG.nom);
+    formData.append('direccion_emisor', CFG.dir);
+    formData.append('ubigeo_emisor', CFG.ubi || '150101');
+    formData.append('cliente_nombre', NC_REF.cliente || 'Cliente Final');
+    formData.append('cliente_tipo_doc', NC_REF.ruc_cliente?.length === 11 ? '6' : '1');
+    formData.append('cliente_num_doc', NC_REF.ruc_cliente || '-');
+    formData.append('items_json', JSON.stringify(NC_REF.items || []));
+    formData.append('total', total.toFixed(2));
+    // Datos específicos de NC
+    formData.append('motivo_nc', motivo);
+    formData.append('descripcion_nc', descripcion);
+    formData.append('ref_tipo', NC_REF.tipo === 'FACTURA' ? '01' : '03');
+    formData.append('ref_numero', NC_REF.numero);
+    
+    const response = await fetch(`${BACKEND_URL}/api/emitir`, {
+      method: 'POST',
+      body: formData
+    });
+    
+    const result = await response.json();
+    btn.innerHTML = '📝 Emitir NC'; btn.disabled = false;
+    
+    if(result.ok && result.estado === 'ACEPTADO'){
+      const row = {
+        numero: `${CFG.snc}-${ns}`,
+        tipo: 'NOTA_CREDITO',
+        fecha: new Date().toISOString(),
+        cliente: NC_REF.cliente,
+        total: parseFloat(total.toFixed(2)),
+        igv: parseFloat((total - total/1.18).toFixed(2)),
+        base_imponible: parseFloat((total/1.18).toFixed(2)),
+        items_count: (NC_REF.items||[]).reduce((s,i) => s + (i.qty||1), 0),
+        items: NC_REF.items || [],
+        estado: 'ACEPTADO',
+        pago: NC_REF.pago || 'EF',
+        cdr_hash: result.cdr_hash,
+        ref_numero: NC_REF.numero,
+      };
+      
+      await saveDoc(row);
+      CFG.nnc++;
+      await db.from('empresas').update({ num_nc: CFG.nnc }).eq('id', USER.id);
+      
+      closeOv('ov-nc');
+      toast(`✓ NC ${CFG.snc}-${ns} emitida — ACEPTADO por SUNAT`);
+      buildDash(); renderHist();
+      NC_REF = null;
+    } else {
+      const errorMsg = result.error_sunat || result.mensaje || 'Error desconocido';
+      toast(`✗ SUNAT rechazó NC: ${errorMsg}`, 5000);
+    }
+    
+  } catch(error){
+    btn.innerHTML = '📝 Emitir NC'; btn.disabled = false;
+    console.error('Error NC:', error);
+    toast('✗ Error de conexión al emitir NC');
+  }
+}
 </script>
 </body>
 </html>
