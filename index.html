@@ -1142,20 +1142,36 @@ const DEFAULT_PRODS = [
 // ═══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('sql-box').textContent = SETUP_SQL;
-  // Escuchar cambios de sesión
+
+  // Flag para ejecutar onLogin() una sola vez por sesión activa.
+  // Evita doble llamada (INITIAL_SESSION + getSession) y re-cargas
+  // innecesarias por TOKEN_REFRESHED o USER_UPDATED.
+  let _appReady = false;
+
   db.auth.onAuthStateChange(async (event, session) => {
-    if(session?.user){
-      USER = session.user;
-      await onLogin();
-    } else {
+    if(event === 'SIGNED_OUT') {
       USER = null;
+      _appReady = false;
       showAuth();
+      return;
+    }
+    if(session?.user) {
+      USER = session.user; // actualizar silenciosamente en refresh de token
+      if(!_appReady && (event === 'SIGNED_IN' || event === 'INITIAL_SESSION')) {
+        _appReady = true;
+        await onLogin();
+      }
     }
   });
-  // Verificar sesión existente
+
+  // Fallback: si onAuthStateChange no dispara INITIAL_SESSION
   const { data:{ session } } = await db.auth.getSession();
-  if(session?.user){ USER = session.user; await onLogin(); }
-  else showAuth();
+  if(session?.user) {
+    USER = session.user;
+    if(!_appReady) { _appReady = true; await onLogin(); }
+  } else if(!_appReady) {
+    showAuth();
+  }
 });
 
 // ═══════════════════════════════════════════
