@@ -640,6 +640,34 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <div style="font-size:11px;color:var(--g600);margin-top:4px">Variables: {nombre} {tipo} {numero} {total} {link}</div>
       </div>
 
+      <div class="cfg-t" style="margin-top:6px">Google Drive (Respaldo Automático)</div>
+      <div class="warn-b" style="margin-bottom:11px">
+        📁 Los PDF de tus comprobantes se guardarán automáticamente en tu Drive
+      </div>
+      <div class="cfi">
+        <div>
+          <div class="cfl">Activar Google Drive</div>
+          <div class="cfs" id="gdrive-status">Desconectado</div>
+        </div>
+        <button class="tg off" id="tg-gdrive" onclick="flipGDrive()"></button>
+      </div>
+      <div id="gdrive-connect" style="display:none;margin-top:11px">
+        <button class="btn bp fw" onclick="connectGDrive()">
+          📁 Conectar con Google Drive
+        </button>
+        <div style="font-size:11px;color:var(--g600);margin-top:6px">
+          Ruta: /FacturaPe/Comprobantes/YYYY-MM-DD/
+        </div>
+      </div>
+      <div id="gdrive-connected" style="display:none;margin-top:11px">
+        <div class="ok-bx" style="font-size:12px">
+          ✓ Conectado - Los PDF se guardan automáticamente
+        </div>
+        <button class="btn bd btn-sm fw" onclick="disconnectGDrive()">
+          Desconectar Drive
+        </button>
+      </div>
+
       <div class="cfg-t" style="margin-top:4px">Cuenta</div>
       <div class="cfi">
         <div><div class="cfl" id="cfg-email-lbl">—</div><div class="cfs">Sesión activa</div></div>
@@ -782,6 +810,78 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
 
 <div id="toast"></div>
 
+<!-- WELCOME MODAL (primera vez) -->
+<div class="ov show" id="ov-welcome" style="display:none">
+  <div class="modal" style="max-width:520px;max-height:85dvh">
+    <div style="text-align:center;margin-bottom:18px">
+      <div class="auth-logo" style="margin:0 auto 16px">FP</div>
+      <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;margin-bottom:4px">
+        ¡Bienvenido a FacturaPe! 🎉
+      </div>
+      <div style="font-size:13px;color:var(--g600)">
+        Facturación electrónica SUNAT para Perú
+      </div>
+    </div>
+
+    <div class="card" style="max-height:280px;overflow-y:auto;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:9px">
+        📋 Términos de Uso y Privacidad
+      </div>
+      <div style="font-size:12px;line-height:1.6;color:var(--g400)">
+        <p style="margin-bottom:9px">
+          <strong>Protección de tus datos:</strong> En FacturaPe nos tomamos muy en serio la seguridad y privacidad de tu información. Todos los datos que ingreses (RUC, credenciales SOL, certificados, comprobantes) están protegidos mediante:
+        </p>
+        <ul style="margin-left:18px;margin-bottom:9px">
+          <li>Cifrado en tránsito (HTTPS/TLS)</li>
+          <li>Almacenamiento seguro en Supabase (AWS - región Lima, Perú)</li>
+          <li>Row Level Security: cada empresa solo accede a sus propios datos</li>
+          <li>Sin acceso de terceros: tu información es privada</li>
+        </ul>
+        <p style="margin-bottom:9px">
+          <strong>Uso de la información:</strong> Tus credenciales SUNAT y certificado digital se utilizan ÚNICAMENTE para firmar y enviar comprobantes electrónicos a SUNAT en tu nombre. No compartimos, vendemos ni utilizamos tu información para otros fines.
+        </p>
+        <p style="margin-bottom:9px">
+          <strong>Responsabilidad:</strong> FacturaPe es una herramienta para facilitar la emisión de comprobantes. Eres responsable de:
+        </p>
+        <ul style="margin-left:18px;margin-bottom:9px">
+          <li>Mantener tus credenciales seguras</li>
+          <li>Verificar que los comprobantes sean correctos antes de emitir</li>
+          <li>Cumplir con las obligaciones tributarias vigentes</li>
+        </ul>
+        <p style="margin-bottom:9px">
+          <strong>Soporte:</strong> Si tienes dudas o problemas, estamos aquí para ayudarte. Contáctanos a través de los canales de soporte.
+        </p>
+        <p style="margin-bottom:0">
+          Al hacer click en "Aceptar y continuar", confirmas que has leído y aceptas estos términos.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="background:rgba(0,201,167,.05);border-color:rgba(0,201,167,.15);margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:9px;color:var(--teal)">
+        🚀 Primeros pasos
+      </div>
+      <div style="font-size:12px;line-height:1.7;color:var(--text)">
+        <strong>1. Configura tu empresa</strong><br>
+        Ve a <strong>Config (⚙️)</strong> y completa: RUC, credenciales SOL, certificado digital, series de comprobantes.
+        <br><br>
+        <strong>2. Agrega tus productos</strong><br>
+        Ve a <strong>Catálogo (📦)</strong> y crea los productos/servicios que vendes.
+        <br><br>
+        <strong>3. Emite tu primer comprobante</strong><br>
+        Ve a <strong>Emitir (✚)</strong>, selecciona productos y envía a SUNAT.
+        <br><br>
+        <strong>4. Revisa tu historial</strong><br>
+        En <strong>Historial (📋)</strong> puedes ver todos tus comprobantes, descargar PDF y exportar a Excel.
+      </div>
+    </div>
+
+    <button class="btn bp fw btn-lg" onclick="acceptWelcome()">
+      Aceptar y continuar →
+    </button>
+  </div>
+</div>
+
 <script>
 // ═══════════════════════════════════════════
 //  SUPABASE CONFIG
@@ -883,6 +983,8 @@ let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf
 let PRODS = [];
 let DOCS  = [];
 let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null };
+let GDRIVE_TOKEN = null;
+let GDRIVE_ENABLED = false;
 
 const DEFAULT_PRODS = [
   {code:'P001',name:'Pollo a la brasa (1/4)', price:18.5,unit:'NIU',categoria:'PLATOS',  ico:'🍗',stock:45},
@@ -990,6 +1092,7 @@ async function onLogin(){
   document.getElementById('cfg-email-lbl').textContent=email;
   const av=document.getElementById('sb-user');
   if(av) av.textContent=(email[0]||'U').toUpperCase();
+  await checkWelcome();
 }
 
 // ═══════════════════════════════════════════
@@ -1012,7 +1115,157 @@ async function loadEmpresa(){
       waOn:data.wa_activo||false, waNum:data.wa_numero||'', waMsg:data.wa_mensaje||'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
     };
     applyCfg();
+    GDRIVE_TOKEN = data.gdrive_token || null;
+    GDRIVE_ENABLED = data.gdrive_enabled || false;
+    setTgEl('tg-gdrive', GDRIVE_ENABLED);
+    if(GDRIVE_ENABLED && GDRIVE_TOKEN){
+      document.getElementById('gdrive-connected').style.display = 'block';
+    }
+    updateGDriveStatus();
   }
+}
+
+// ═══════════════════════════════════════════
+//  GOOGLE DRIVE
+// ═══════════════════════════════════════════
+function flipGDrive(){
+  GDRIVE_ENABLED = !GDRIVE_ENABLED;
+  setTgEl('tg-gdrive', GDRIVE_ENABLED);
+  document.getElementById('gdrive-connect').style.display = GDRIVE_ENABLED && !GDRIVE_TOKEN ? 'block' : 'none';
+  document.getElementById('gdrive-connected').style.display = GDRIVE_ENABLED && GDRIVE_TOKEN ? 'block' : 'none';
+  updateGDriveStatus();
+}
+function updateGDriveStatus(){
+  const status = document.getElementById('gdrive-status');
+  if(!status) return;
+  if(GDRIVE_TOKEN){
+    status.textContent = '✓ Conectado';
+    status.style.color = 'var(--teal)';
+  } else if(GDRIVE_ENABLED){
+    status.textContent = 'Esperando conexión...';
+    status.style.color = 'var(--gold)';
+  } else {
+    status.textContent = 'Desconectado';
+    status.style.color = 'var(--g600)';
+  }
+}
+function connectGDrive(){
+  const CLIENT_ID = 'TU_CLIENT_ID_AQUI'; // TODO: Configurar en Google Cloud Console
+  const REDIRECT_URI = window.location.origin + window.location.pathname;
+  const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}`;
+  window.location.href = authUrl;
+}
+function disconnectGDrive(){
+  GDRIVE_TOKEN = null;
+  GDRIVE_ENABLED = false;
+  setTgEl('tg-gdrive', false);
+  document.getElementById('gdrive-connect').style.display = 'none';
+  document.getElementById('gdrive-connected').style.display = 'none';
+  updateGDriveStatus();
+  db.from('empresas').update({ gdrive_token: null, gdrive_enabled: false }).eq('id', USER.id);
+  toast('✓ Google Drive desconectado');
+}
+// Capturar token de OAuth redirect
+window.addEventListener('load', () => {
+  const hash = window.location.hash;
+  if(hash && hash.includes('access_token')){
+    const params = new URLSearchParams(hash.substring(1));
+    const token = params.get('access_token');
+    if(token){
+      GDRIVE_TOKEN = token;
+      GDRIVE_ENABLED = true;
+      db.from('empresas').update({ gdrive_token: token, gdrive_enabled: true }).eq('id', USER.id);
+      window.history.replaceState(null, '', window.location.pathname);
+      toast('✓ Google Drive conectado');
+      updateGDriveStatus();
+      setTgEl('tg-gdrive', true);
+      document.getElementById('gdrive-connected').style.display = 'block';
+    }
+  }
+});
+async function uploadPDFToDrive(pdfBlob, filename, docData){
+  if(!GDRIVE_TOKEN || !GDRIVE_ENABLED) return;
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const folderPath = `FacturaPe/Comprobantes/${today}`;
+    const folderId = await getOrCreateFolder(folderPath);
+    const metadata = {
+      name: filename,
+      parents: [folderId],
+      description: `${docData.tipo} ${docData.numero} - ${docData.cliente}`
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', pdfBlob);
+    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GDRIVE_TOKEN}` },
+      body: form
+    });
+    if(response.ok){
+      const result = await response.json();
+      console.log('PDF guardado en Drive:', result.id);
+      return result.id;
+    }
+  } catch(e){
+    console.error('Error subiendo a Drive:', e);
+  }
+}
+async function getOrCreateFolder(path){
+  const parts = path.split('/');
+  let parentId = 'root';
+  for(const folderName of parts){
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      { headers: { 'Authorization': `Bearer ${GDRIVE_TOKEN}` } }
+    );
+    const searchData = await searchResponse.json();
+    if(searchData.files && searchData.files.length > 0){
+      parentId = searchData.files[0].id;
+    } else {
+      const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GDRIVE_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentId]
+        })
+      });
+      const createData = await createResponse.json();
+      parentId = createData.id;
+    }
+  }
+  return parentId;
+}
+
+// ═══════════════════════════════════════════
+//  WELCOME SCREEN (primera vez)
+// ═══════════════════════════════════════════
+async function checkWelcome(){
+  if(!USER) return;
+  const { data } = await db.from('empresas').select('welcome_accepted').eq('id', USER.id).single();
+  if(!data || !data.welcome_accepted){
+    document.getElementById('ov-welcome').style.display = 'flex';
+    setTimeout(() => {
+      document.getElementById('ov-welcome').classList.add('show');
+    }, 100);
+  }
+}
+async function acceptWelcome(){
+  await db.from('empresas').update({ welcome_accepted: true }).eq('id', USER.id);
+  document.getElementById('ov-welcome').classList.remove('show');
+  setTimeout(() => {
+    document.getElementById('ov-welcome').style.display = 'none';
+  }, 300);
+  toast('✓ ¡Bienvenido! Comienza configurando tu empresa');
+  setTimeout(() => {
+    goTo('s-cfg', 'cfg');
+  }, 1500);
 }
 
 async function saveCfg(){
@@ -1664,16 +1917,26 @@ function openPDF(){
   const doc = ST.last;
   if(!doc){ toast('⚠️ No hay comprobante reciente'); return; }
   toast('📄 Generando PDF...');
-  
+
   setTimeout(() => {
     try {
       const pdf = generarPDF(doc);
       if(pdf){
-        // Esperar al QR
         setTimeout(() => {
           const filename = `${(doc.tipo||'BOL').substring(0,3)}_${(doc.numero||'000').replace(/[-\/]/g,'_')}.pdf`;
+          const blob = pdf.output('blob');
+
+          // Guardar en Drive si está activado
+          if(GDRIVE_ENABLED && GDRIVE_TOKEN){
+            uploadPDFToDrive(blob, filename, doc).then(() => {
+              toast('✓ PDF descargado y guardado en Drive');
+            });
+          }
+
           pdf.save(filename);
-          toast('✓ PDF descargado');
+          if(!GDRIVE_ENABLED || !GDRIVE_TOKEN){
+            toast('✓ PDF descargado');
+          }
         }, 300);
       }
     } catch(e){
