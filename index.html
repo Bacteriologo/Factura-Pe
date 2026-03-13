@@ -1056,8 +1056,9 @@ CREATE TABLE IF NOT EXISTS empresas (
   igv_activo BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
--- Migración para bases de datos existentes (ignorar si ya existe):
--- ALTER TABLE empresas ADD COLUMN IF NOT EXISTS igv_activo BOOLEAN DEFAULT true;
+-- ── MIGRACIÓN para bases de datos existentes ──────────────────────────
+-- Si tu tabla ya existía antes, ejecuta SOLO esta línea en Supabase SQL Editor:
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS igv_activo BOOLEAN DEFAULT true;
 
 -- 2. Tabla de comprobantes
 CREATE TABLE IF NOT EXISTS comprobantes (
@@ -1415,14 +1416,22 @@ async function saveCfg(){
   CFG.sf=gv('c-sf')||'F001'; CFG.nf=parseInt(gv('c-nf'))||1;
   CFG.snc=gv('c-snc')||'NC01'; CFG.nnc=parseInt(gv('c-nnc'))||1;
   CFG.waNum=gv('c-wa'); CFG.waMsg=gv('c-wam');
-  const { error } = await db.from('empresas').upsert({
+  const payload = {
     id:USER.id, ruc:CFG.ruc, nombre:CFG.nom, direccion:CFG.dir, ubigeo:CFG.ubi,
     usuario_sol:CFG.su, clave_sol:CFG.sp, entorno:CFG.env,
     serie_boleta:CFG.sb, num_boleta:CFG.nb, serie_factura:CFG.sf, num_factura:CFG.nf,
     serie_nc:CFG.snc, num_nc:CFG.nnc,
     wa_activo:CFG.waOn, wa_numero:CFG.waNum, wa_mensaje:CFG.waMsg,
     igv_activo:CFG.igvOn,
-  });
+  };
+  let { error } = await db.from('empresas').upsert(payload);
+  if(error && error.message && error.message.includes('igv_activo')){
+    // Columna aún no existe en esta BD → guardar sin ella y avisar
+    const { igv_activo, ...payloadSinIgv } = payload;
+    const res2 = await db.from('empresas').upsert(payloadSinIgv);
+    error = res2.error;
+    if(!error) toast('⚠️ Guardado (sin IGV — ejecuta la migración SQL en Supabase)');
+  }
   if(error){ toast('✗ Error al guardar: '+error.message); return; }
   applyCfg(); updSerie();
   showSuccess('¡Configuración guardada!', 'Tus datos se sincronizaron en la nube correctamente');
