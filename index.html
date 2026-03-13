@@ -596,6 +596,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div id="cert-status" style="margin-top:9px;display:none">
         <!-- Se llenará dinámicamente -->
       </div>
+      <div id="cert-delete" style="display:none;margin-top:10px">
+        <button class="btn bd btn-sm fw" onclick="eliminarCertificado()">
+          🗑️ Eliminar Certificado
+        </button>
+        <div style="font-size:11px;color:var(--g600);margin-top:6px">
+          Deberás cargarlo nuevamente para emitir comprobantes
+        </div>
+      </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">
         Se cargará en el backend para usar en firma digital XAdES-BES
       </div>
@@ -1390,6 +1398,7 @@ async function saveCfg(){
 // ═══════════════════════════════════════════
 function mostrarEstadoCert(data){
   const status = document.getElementById('cert-status');
+  const delBtn = document.getElementById('cert-delete');
   if(!status) return;
   if(data && data.ok){
     status.innerHTML = `
@@ -1400,8 +1409,36 @@ function mostrarEstadoCert(data){
       </div>
     `;
     status.style.display = 'block';
+    if(delBtn) delBtn.style.display = 'block';
   } else {
     status.style.display = 'none';
+    if(delBtn) delBtn.style.display = 'none';
+  }
+}
+async function eliminarCertificado(){
+  const confirmMsg = '¿Seguro que quieres eliminar el certificado digital?\n\n' +
+                     '⚠️ Deberás cargarlo nuevamente para poder emitir comprobantes.\n\n' +
+                     'Esta acción no se puede deshacer.';
+  if(!confirm(confirmMsg)) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/eliminar-certificado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empresa_id: USER.id })
+    });
+    const result = await response.json();
+    if(result.ok){
+      mostrarEstadoCert(null);
+      sv('c-cert-pass', '');
+      const fileInput = document.getElementById('c-cert');
+      if(fileInput) fileInput.value = '';
+      toast('✓ Certificado eliminado correctamente');
+    } else {
+      toast('✗ ' + (result.mensaje || 'Error al eliminar certificado'));
+    }
+  } catch(e){
+    console.error('Error eliminando certificado:', e);
+    toast('✗ Error de conexión al eliminar certificado');
   }
 }
 

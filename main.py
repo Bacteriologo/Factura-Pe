@@ -12,7 +12,7 @@ import zipfile
 import io
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
@@ -95,7 +95,21 @@ async def configurar_certificado(
         return JSONResponse({"ok": False, "detail": str(e)}, status_code=400)
 
 
-def validar_p12(p12_bytes: bytes, password: str) -> dict:
+@app.post("/api/eliminar-certificado")
+async def eliminar_certificado(
+    empresa_id: str = Body(..., embed=True)
+):
+    """Elimina el certificado digital de memoria."""
+    try:
+        if empresa_id in CERT_STORAGE:
+            del CERT_STORAGE[empresa_id]
+        return {"ok": True, "mensaje": "Certificado eliminado correctamente"}
+    except Exception as e:
+        return JSONResponse({
+            "ok": False,
+            "detail": str(e),
+            "mensaje": "Error al eliminar certificado"
+        }, status_code=400)(p12_bytes: bytes, password: str) -> dict:
     """Valida que el archivo P12 sea legible con la contraseña dada.
     Devuelve subject y días restantes de validez si está disponible."""
     try:
