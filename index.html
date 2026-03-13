@@ -811,6 +811,99 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   </div>
 </div>
 
+<!-- MODAL: ASISTENTE DE CORRELACIÓN -->
+<div class="ov" id="ov-correlacion">
+  <div class="modal" style="max-width:500px;max-height:88dvh;overflow-y:auto">
+    <div class="mh"></div>
+
+    <!-- PASO 1: ¿Ya emitió antes? -->
+    <div id="corr-paso1">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(245,166,35,.12);border:2px solid rgba(245,166,35,.3);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">⚠️</div>
+        <div class="mt2">Configurar Numeración</div>
+      </div>
+      <div class="ms2" style="margin-bottom:18px;text-align:center">
+        Es importante mantener la correlación correcta con SUNAT
+      </div>
+      <div class="card" style="background:rgba(245,166,35,.06);border-color:rgba(245,166,35,.18);margin-bottom:18px">
+        <div style="font-size:14px;line-height:1.7;font-weight:500;text-align:center">
+          ¿Ya has emitido boletas o facturas electrónicas antes con este RUC?
+        </div>
+      </div>
+      <div style="display:flex;gap:9px">
+        <button class="btn bs fw" onclick="corrEsNuevo()">No, es mi primera vez</button>
+        <button class="btn bp fw" onclick="corrYaEmitio()">Sí, ya emití antes</button>
+      </div>
+    </div>
+
+    <!-- PASO 2A: Usuario nuevo -->
+    <div id="corr-paso2-nuevo" style="display:none">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(46,213,115,.12);border:2px solid rgba(46,213,115,.3);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">✓</div>
+        <div class="mt2">¡Listo para empezar!</div>
+      </div>
+      <div class="ms2" style="margin-bottom:18px;text-align:center">La numeración comenzará desde el inicio</div>
+      <div class="ok-bx" style="font-size:13px;margin-bottom:16px">
+        <div style="font-weight:600;margin-bottom:8px">📋 Numeración inicial configurada:</div>
+        <div style="padding-left:8px">
+          <div style="margin-bottom:4px">• Boletas: <strong>B001-00000001</strong></div>
+          <div>• Facturas: <strong>F001-00000001</strong></div>
+        </div>
+      </div>
+      <button class="btn bp fw btn-lg" onclick="closeOv('ov-correlacion')">Entendido →</button>
+    </div>
+
+    <!-- PASO 2B: Ya emitió antes -->
+    <div id="corr-paso2-existe" style="display:none">
+      <div class="mt2" style="margin-bottom:6px">📋 Configurar Numeración</div>
+      <div class="ms2" style="margin-bottom:16px">Ingresa el número de tu último comprobante emitido</div>
+
+      <div class="card" style="margin-bottom:14px;font-size:12px;line-height:1.65;background:rgba(255,255,255,.02)">
+        <div style="font-weight:600;margin-bottom:9px;font-size:13px">ℹ️ ¿Dónde encuentro mi último número?</div>
+        <div style="margin-bottom:11px"><strong style="color:var(--teal)">Opción 1 - Consulta en SUNAT:</strong></div>
+        <ol style="margin-left:20px;margin-bottom:12px;color:var(--g400)">
+          <li>Ingresa a <strong>www.sunat.gob.pe</strong></li>
+          <li>Operaciones en Línea → <strong>Clave SOL</strong></li>
+          <li>Comprobantes Electrónicos → <strong>Consulta</strong></li>
+          <li>Busca tu última boleta/factura emitida</li>
+        </ol>
+        <div style="margin-bottom:6px"><strong style="color:var(--teal)">Opción 2 - Sistema anterior:</strong></div>
+        <div style="color:var(--g400)">Revisa el último comprobante que emitiste en tu sistema previo</div>
+      </div>
+
+      <div class="warn-b" style="margin-bottom:16px;font-size:12px">
+        <strong>💡 Ejemplo:</strong> Si tu última boleta fue <strong>B001-00000523</strong>, ingresa <strong>523</strong>. FacturaPe continuará desde <strong>524</strong>.
+      </div>
+
+      <div class="fg">
+        <label class="flbl">Última Boleta Emitida</label>
+        <div style="display:flex;gap:9px;align-items:center">
+          <input class="fi" id="corr-serie-b" placeholder="B001" style="width:85px" value="B001" maxlength="4">
+          <span style="color:var(--g600);font-size:18px">—</span>
+          <input class="fi" id="corr-num-b" placeholder="523" inputmode="numeric" style="flex:1">
+        </div>
+        <div style="font-size:11px;color:var(--g600);margin-top:5px">Solo el número, sin ceros. Si nunca emitiste boletas, deja en blanco.</div>
+      </div>
+
+      <div class="fg">
+        <label class="flbl">Última Factura Emitida</label>
+        <div style="display:flex;gap:9px;align-items:center">
+          <input class="fi" id="corr-serie-f" placeholder="F001" style="width:85px" value="F001" maxlength="4">
+          <span style="color:var(--g600);font-size:18px">—</span>
+          <input class="fi" id="corr-num-f" placeholder="100" inputmode="numeric" style="flex:1">
+        </div>
+        <div style="font-size:11px;color:var(--g600);margin-top:5px">Solo el número, sin ceros. Si nunca emitiste facturas, deja en blanco.</div>
+      </div>
+
+      <div style="display:flex;gap:9px;margin-top:18px">
+        <button class="btn bs" onclick="corrVolver()" style="padding:12px 16px">← Atrás</button>
+        <button class="btn bp fw btn-lg" onclick="corrGuardarNumeracion()">Guardar y Continuar →</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <!-- WELCOME MODAL (primera vez) -->
@@ -1345,6 +1438,8 @@ async function subirCertificado(){
     if(result.ok){
       toast(`✓ Certificado cargado · Vence en ${result.dias_restantes != null ? result.dias_restantes + ' días' : '—'}`);
       mostrarEstadoCert(result);
+      // Mostrar asistente de correlación
+      setTimeout(() => { openOv('ov-correlacion'); }, 800);
       // Limpiar campos
       fileInput.value = '';
       sv('c-cert-pass', '');
@@ -1356,6 +1451,64 @@ async function subirCertificado(){
     console.error('Error:', error);
     toast('✗ Error de conexión con el backend');
   }
+}
+
+// ═══════════════════════════════════════════
+//  ASISTENTE DE CORRELACIÓN
+// ═══════════════════════════════════════════
+function corrEsNuevo(){
+  document.getElementById('corr-paso1').style.display = 'none';
+  document.getElementById('corr-paso2-nuevo').style.display = 'block';
+  document.getElementById('corr-paso2-existe').style.display = 'none';
+}
+function corrYaEmitio(){
+  document.getElementById('corr-paso1').style.display = 'none';
+  document.getElementById('corr-paso2-nuevo').style.display = 'none';
+  document.getElementById('corr-paso2-existe').style.display = 'block';
+}
+function corrVolver(){
+  document.getElementById('corr-paso1').style.display = 'block';
+  document.getElementById('corr-paso2-nuevo').style.display = 'none';
+  document.getElementById('corr-paso2-existe').style.display = 'none';
+}
+async function corrGuardarNumeracion(){
+  const serieB = (gv('corr-serie-b') || 'B001').toUpperCase().trim();
+  const numBStr = gv('corr-num-b').trim();
+  const serieF = (gv('corr-serie-f') || 'F001').toUpperCase().trim();
+  const numFStr = gv('corr-num-f').trim();
+
+  const numB = numBStr ? parseInt(numBStr) : 0;
+  const numF = numFStr ? parseInt(numFStr) : 0;
+
+  if(numB <= 0 && numF <= 0){
+    toast('⚠️ Debes ingresar al menos un número válido');
+    return;
+  }
+
+  const siguienteB = numB > 0 ? numB + 1 : 1;
+  const siguienteF = numF > 0 ? numF + 1 : 1;
+
+  const { error } = await db.from('empresas').update({
+    serie_boleta: serieB,
+    num_boleta: siguienteB,
+    serie_factura: serieF,
+    num_factura: siguienteF
+  }).eq('id', USER.id);
+
+  if(error){
+    console.error('Error guardando numeración:', error);
+    toast('✗ Error al guardar numeración');
+    return;
+  }
+
+  CFG.sb = serieB; CFG.nb = siguienteB;
+  CFG.sf = serieF; CFG.nf = siguienteF;
+  sv('c-sb', serieB); sv('c-nb', pad(siguienteB));
+  sv('c-sf', serieF); sv('c-nf', pad(siguienteF));
+  updSerie();
+
+  toast('✓ Numeración configurada correctamente');
+  closeOv('ov-correlacion');
 }
 
 function applyCfg(){
@@ -2089,6 +2242,20 @@ function expCSV(){
 function openOv(id){ document.getElementById(id)?.classList.add('show'); }
 function closeOv(id){ document.getElementById(id)?.classList.remove('show'); }
 document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('show'); }));
+// Reiniciar modal de correlación al cerrar haciendo click en el fondo
+const ovCorr = document.getElementById('ov-correlacion');
+if(ovCorr){
+  ovCorr.addEventListener('click', (e) => {
+    if(e.target === ovCorr){
+      document.getElementById('corr-paso1').style.display = 'block';
+      document.getElementById('corr-paso2-nuevo').style.display = 'none';
+      document.getElementById('corr-paso2-existe').style.display = 'none';
+      sv('corr-num-b', ''); sv('corr-num-f', '');
+      sv('corr-serie-b', 'B001'); sv('corr-serie-f', 'F001');
+      ovCorr.classList.remove('show');
+    }
+  });
+}
 let _tt;
 function toast(msg, duration=2800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), duration); }
 function copySql(){ navigator.clipboard.writeText(SETUP_SQL).then(()=>toast('✓ SQL copiado')).catch(()=>toast('Copia el SQL manualmente')); }
