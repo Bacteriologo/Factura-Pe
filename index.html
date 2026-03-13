@@ -593,6 +593,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
         📤 Cargar Certificado
       </button>
+      <div id="cert-status" style="margin-top:9px;display:none">
+        <!-- Se llenará dinámicamente -->
+      </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">
         Se cargará en el backend para usar en firma digital XAdES-BES
       </div>
@@ -1292,6 +1295,23 @@ async function saveCfg(){
 // ═══════════════════════════════════════════
 //  CERTIFICADO DIGITAL
 // ═══════════════════════════════════════════
+function mostrarEstadoCert(data){
+  const status = document.getElementById('cert-status');
+  if(!status) return;
+  if(data && data.ok){
+    status.innerHTML = `
+      <div class="ok-bx" style="font-size:11px">
+        <div style="font-weight:600;margin-bottom:2px">✓ Certificado cargado</div>
+        <div style="opacity:.8">Archivo: ${data.filename || '—'}</div>
+        <div style="opacity:.8">Válido por: ${data.dias_restantes != null ? data.dias_restantes + ' días' : '—'}</div>
+      </div>
+    `;
+    status.style.display = 'block';
+  } else {
+    status.style.display = 'none';
+  }
+}
+
 async function subirCertificado(){
   const fileInput = document.getElementById('c-cert');
   const password = gv('c-cert-pass');
@@ -1323,7 +1343,8 @@ async function subirCertificado(){
     const result = await response.json();
     
     if(result.ok){
-      toast(`✓ Certificado cargado · Vence en ${result.dias_restantes} días`);
+      toast(`✓ Certificado cargado · Vence en ${result.dias_restantes != null ? result.dias_restantes + ' días' : '—'}`);
+      mostrarEstadoCert(result);
       // Limpiar campos
       fileInput.value = '';
       sv('c-cert-pass', '');
@@ -1726,11 +1747,23 @@ async function emitDoc(){
       // ERROR - Comprobante rechazado
       const errorMsg = result.error_sunat || result.mensaje || 'Error desconocido';
       const errorCode = result.codigo || 'ERR';
-      
-      toast(`✗ SUNAT rechazó [${errorCode}]: ${errorMsg}`, 5000);
-      
-      // Mostrar detalles del error
-      alert(`❌ Comprobante RECHAZADO por SUNAT\n\nCódigo: ${errorCode}\nMotivo: ${errorMsg}\n\nVerifica:\n- Certificado digital vigente\n- Credenciales SOL correctas\n- Datos del comprobante\n- Estado del contribuyente en SUNAT`);
+
+      btn.innerHTML='Confirmar ✓'; btn.disabled=false;
+
+      // Texto de ayuda según el código de error
+      let helpText = '';
+      if(errorCode === 'NO_CERT'){
+        helpText = '\n\n💡 SOLUCIÓN:\n1. Ve a Configuración (⚙️)\n2. Carga tu certificado digital (.p12 o .pfx)\n3. Ingresa la contraseña del certificado\n4. Vuelve a intentar emitir';
+      } else if(errorCode === 'NO_CERT_PASS'){
+        helpText = '\n\n💡 SOLUCIÓN:\nVuelve a cargar el certificado en Configuración e ingresa la contraseña correcta.';
+      } else if(errorMsg.toLowerCase().includes('firma') || errorMsg.toLowerCase().includes('signature')){
+        helpText = '\n\n💡 POSIBLES CAUSAS:\n- Certificado vencido\n- Contraseña incorrecta\n- Archivo corrupto\n\nSOLUCIÓN: Recarga el certificado en Configuración';
+      } else if(/^[23]\d{3}$/.test(errorCode)){
+        helpText = '\n\n💡 Código SUNAT ' + errorCode + ':\nRevisa la guía de códigos de error en:\nhttps://cpe.sunat.gob.pe/manuales';
+      }
+
+      toast(`✗ Error [${errorCode}]: ${errorMsg}`, 5000);
+      alert(`❌ Comprobante no emitido\n\nCódigo: ${errorCode}\nMotivo: ${errorMsg}${helpText}`);
     }
     
   } catch(error){

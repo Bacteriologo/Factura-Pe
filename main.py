@@ -87,7 +87,8 @@ async def configurar_certificado(
             "ok": True,
             "mensaje": "Certificado cargado y validado correctamente",
             "subject": info_cert.get("subject", ""),
-            "filename": archivo_p12.filename
+            "filename": archivo_p12.filename,
+            "dias_restantes": info_cert.get("dias_restantes")
         }
 
     except Exception as e:
@@ -95,16 +96,22 @@ async def configurar_certificado(
 
 
 def validar_p12(p12_bytes: bytes, password: str) -> dict:
-    """Valida que el archivo P12 sea legible con la contraseña dada."""
+    """Valida que el archivo P12 sea legible con la contraseña dada.
+    Devuelve subject y días restantes de validez si está disponible."""
     try:
         from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_certificates
         p12_password = password.encode("utf-8") if isinstance(password, str) else password
         private_key, cert, _ = load_key_and_certificates(p12_bytes, p12_password)
         subject = cert.subject.rfc4514_string() if cert else ""
-        return {"valido": True, "subject": subject}
+        dias_restantes = None
+        if cert:
+            not_after = cert.not_valid_after_utc if hasattr(cert, "not_valid_after_utc") else cert.not_valid_after.replace(tzinfo=timezone.utc)
+            delta = not_after - datetime.now(timezone.utc)
+            dias_restantes = max(0, delta.days)
+        return {"valido": True, "subject": subject, "dias_restantes": dias_restantes}
     except ImportError:
         # cryptography no disponible, omitir validación
-        return {"valido": True, "subject": ""}
+        return {"valido": True, "subject": "", "dias_restantes": None}
     except Exception as e:
         return {"valido": False, "error": f"Certificado inválido o contraseña incorrecta: {e}"}
 
@@ -210,6 +217,25 @@ async def emitir_comprobante(
     ref_tipo: str = Form(""),
     ref_numero: str = Form(""),
 ):
+    # ── Verificar certificado digital ────────────────────────────────
+    cert = CERT_STORAGE.get(empresa_id)
+    if not cert or not cert.get("p12_bytes"):
+        return JSONResponse({
+            "ok": False,
+            "estado": "ERROR",
+            "codigo": "NO_CERT",
+            "error_sunat": "No hay certificado digital cargado",
+            "mensaje": "Debes cargar tu certificado digital (.p12/.pfx) en Configuración antes de poder emitir comprobantes."
+        }, status_code=400)
+    if not cert.get("password"):
+        return JSONResponse({
+            "ok": False,
+            "estado": "ERROR",
+            "codigo": "NO_CERT_PASS",
+            "error_sunat": "Falta contraseña del certificado",
+            "mensaje": "El certificado fue cargado pero falta la contraseña. Vuelve a cargarlo en Configuración."
+        }, status_code=400)
+
     # ── Validaciones de entrada ──────────────────────────────────────
     if len(ruc_emisor) != 11 or not ruc_emisor.isdigit():
         return JSONResponse({"ok": False, "error_sunat": "RUC emisor inválido (debe tener 11 dígitos)"}, status_code=400)
@@ -668,6 +694,17 @@ async def enviar_sunat(url: str, ruc: str, usuario_sol: str, clave_sol: str,
             error_msg = fault.group(1).strip() if fault else "Error SOAP desconocido"
             code_match = re.search(r"(\d{4})", error_msg)
             code = code_match.group(1) if code_match else "SOAP_ERR"
+
+            # Mensaje especial para errores de firma digital
+            if "signature" in error_msg.lower() or "firmado" in error_msg.lower():
+                return {
+                    "ok": False,
+                    "estado": "RECHAZADO",
+                    "codigo": code,
+                    "error_sunat": "Problema con la firma digital del comprobante",
+                    "mensaje": "El certificado puede estar vencido, corrupto o la contraseña es incorrecta. Verifica en Configuración que hayas cargado un certificado válido."
+                }
+
             return {
                 "ok": False,
                 "estado": "RECHAZADO",
