@@ -1579,30 +1579,29 @@ async function insertDefaultProds(uid){
 }
 
 async function saveProd(){
-  const name=document.getElementById('np-n')?.value.trim();
+  const name=(document.getElementById('np-n')?.value||'').trim();
   const price=parseFloat(document.getElementById('np-p')?.value)||0;
   if(!name||price<=0){ toast('⚠️ Completa nombre y precio'); return; }
-  const catVal = (gv('np-cat') || 'PRODUCTOS').trim().toUpperCase();
-  const row={ empresa_id:USER.id, code:gv('np-c')||'P'+Date.now().toString(36).slice(-4).toUpperCase(),
-    name, price, unit:gv('np-u')||'NIU', categoria:catVal, ico:'📦', stock:parseInt(gv('np-s'))||0 };
+  if(!USER){ toast('⚠️ Sesión expirada, recarga la página'); return; }
   try {
+    const catVal = (gv('np-cat') || 'PRODUCTOS').trim().toUpperCase();
+    const row={ empresa_id:USER.id, code:gv('np-c')||'P'+Date.now().toString(36).slice(-4).toUpperCase(),
+      name, price, unit:gv('np-u')||'NIU', categoria:catVal, ico:'📦', stock:parseInt(gv('np-s'))||0, activo:true };
     const { data, error } = await db.from('productos').insert([row]).select().single();
-    if(error){ 
+    if(error){
       console.error('Error guardando producto:', error);
-      toast('✗ Error al guardar'); 
-      return; 
+      toast('✗ Error al guardar: '+error.message);
+      return;
     }
     PRODS.push({...data, cat:data.categoria});
     buildCatFilters(); renderCat(); buildQT(); toast('✓ Producto guardado');
-    // Limpiar formulario
     ['np-n','np-c','np-p','np-s','np-cat'].forEach(id=>sv(id,''));
-    document.getElementById('np-u').value = 'NIU'; // Reset select
-    // Cerrar modal y volver al catálogo
+    document.getElementById('np-u').value = 'NIU';
     closeOv('ov-ap');
     goTo('s-cat','cat');
   } catch(err) {
     console.error('Excepción en saveProd:', err);
-    toast('✗ Error inesperado');
+    toast('✗ Error inesperado: '+err.message);
   }
 }
 
