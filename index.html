@@ -1852,7 +1852,8 @@ function renderCart(){
   const cs=document.getElementById('csub');
   if(!ST.cart.length){ document.getElementById('cart').innerHTML='<div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div>'; if(cs) cs.style.display='none'; return; }
   document.getElementById('cart').innerHTML=ST.cart.map(it=>`<div class="ci"><div class="cn"><div class="cnm">${it.name}</div><div class="cs2">S/${parseFloat(it.price).toFixed(2)} c/u</div></div><div class="qr"><button class="qb" onclick="updQ('${it.id}',-1)">−</button><span class="qn">${it.qty}</span><button class="qb" onclick="updQ('${it.id}',+1)">+</button></div><div class="ct2">S/${(parseFloat(it.price)*it.qty).toFixed(2)}</div><button class="rb" onclick="remI('${it.id}')">✕</button></div>`).join('');
-  const {base,igv,total}=tots(); sv('sbase',`S/ ${base.toFixed(2)}`); sv('sigv',`S/ ${igv.toFixed(2)}`); sv('stot',`S/ ${total.toFixed(2)}`);
+  const {base,igv,total}=tots();
+  ['sbase','sigv','stot'].forEach((id,i)=>{ const el=document.getElementById(id); if(el) el.textContent=`S/ ${[base,igv,total][i].toFixed(2)}`; });
   const igvLbl=document.getElementById('igv-lbl'); if(igvLbl) igvLbl.textContent=CFG.igvOn?'IGV (18%)':'IGV (0%)';
   if(cs) cs.style.display='';
 }
