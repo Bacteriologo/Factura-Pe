@@ -456,6 +456,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
                 <div class="drop" id="pd" style="display:none"></div>
               </div>
               <div class="qt" id="qtags"></div>
+              <button class="btn bs btn-sm fw" style="margin-top:9px" onclick="openFreeItem()">✏️ Añadir descripción libre</button>
             </div>
             <div class="card">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
@@ -465,7 +466,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
               <div id="cart"><div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div></div>
               <div id="csub" style="display:none;margin-top:11px;padding-top:11px;border-top:1px solid rgba(255,255,255,.07)">
                 <div class="sr"><span class="sl">Base imponible</span><span class="sv2" id="sbase">S/ 0.00</span></div>
-                <div class="sr"><span class="sl">IGV (18%)</span><span class="sv2" id="sigv">S/ 0.00</span></div>
+                <div class="sr"><span class="sl" id="igv-lbl">IGV (18%)</span><span class="sv2" id="sigv">S/ 0.00</span></div>
                 <div class="sr st2"><span class="sl">TOTAL</span><span class="sv2" id="stot">S/ 0.00</span></div>
               </div>
             </div>
@@ -578,6 +579,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       </div>
       <div class="fg"><label class="flbl">Entorno SUNAT</label>
         <select class="fsel" id="c-env"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
+      </div>
+      <div class="cfi" style="margin-top:11px">
+        <div><div class="cfl">Aplicar IGV (18%)</div><div class="cfs">Desactivar en zonas de selva u operaciones exoneradas</div></div>
+        <button class="tg on" id="tg-igv" onclick="flipIGV()"></button>
       </div>
 
       <div class="cfg-t" style="margin-top:6px">Certificado Digital (.p12 / .pfx)</div>
@@ -711,6 +716,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   </div>
 </div>
 
+<!-- MODAL: ÉXITO GENÉRICO (Ajustes / Catálogo) -->
+<div class="ov" id="ov-success">
+  <div class="modal" style="text-align:center"><div class="mh"></div>
+    <div class="sring" id="success-icon">✓</div>
+    <div class="mt2" id="success-title">¡Guardado!</div>
+    <div class="ms2" id="success-sub" style="margin-bottom:18px"></div>
+    <button class="btn bp fw btn-lg" onclick="closeOv('ov-success')">Continuar</button>
+  </div>
+</div>
+
 <div class="ov" id="ov-ok">
   <div class="modal" style="text-align:center"><div class="mh"></div>
     <div class="sring">✓</div>
@@ -748,7 +763,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   <div class="modal"><div class="mh"></div>
     <div class="mt2">Nuevo Producto</div><div class="ms2">Completa los datos</div>
     <div class="fr2 fg">
-      <div><label class="flbl">Código</label><input class="fi" id="np-c" placeholder="P010"></div>
+      <div><label class="flbl">Código <span style="font-weight:400;color:var(--g600)">(opcional)</span></label><input class="fi" id="np-c" placeholder="Auto"></div>
       <div><label class="flbl">Unidad SUNAT</label>
         <select class="fsel" id="np-u"><option value="NIU">NIU - Unidad</option><option value="ZZ">ZZ - Servicio</option><option value="KGM">KGM - Kg</option><option value="LTR">LTR - Litro</option></select>
       </div>
@@ -772,6 +787,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
     <div class="mf">
       <button class="btn bs fw" onclick="closeOv('ov-ap')">Cancelar</button>
       <button class="btn bp fw" onclick="saveProd()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ÍTEM LIBRE -->
+<div class="ov" id="ov-free">
+  <div class="modal"><div class="mh"></div>
+    <div class="mt2">✏️ Añadir línea libre</div><div class="ms2">Describe el producto o servicio</div>
+    <div class="fg"><label class="flbl">Descripción</label><input class="fi" id="fl-desc" placeholder="Ej: Servicio de instalación"></div>
+    <div class="fr2 fg">
+      <div><label class="flbl">Cantidad</label><input class="fi" id="fl-qty" placeholder="1" type="number" inputmode="decimal" step="0.01" min="0.01"></div>
+      <div><label class="flbl">Precio unit. (inc. IGV)</label><input class="fi" id="fl-price" placeholder="0.00" type="number" inputmode="decimal" step="0.01"></div>
+    </div>
+    <div class="mf">
+      <button class="btn bs fw" onclick="closeOv('ov-free')">Cancelar</button>
+      <button class="btn bp fw" onclick="addFreeItem()">Agregar</button>
     </div>
   </div>
 </div>
@@ -1022,8 +1053,11 @@ CREATE TABLE IF NOT EXISTS empresas (
   wa_activo BOOLEAN DEFAULT false,
   wa_numero TEXT DEFAULT '',
   wa_mensaje TEXT DEFAULT 'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
+  igv_activo BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+-- Migración para bases de datos existentes (ignorar si ya existe):
+-- ALTER TABLE empresas ADD COLUMN IF NOT EXISTS igv_activo BOOLEAN DEFAULT true;
 
 -- 2. Tabla de comprobantes
 CREATE TABLE IF NOT EXISTS comprobantes (
@@ -1083,7 +1117,7 @@ CREATE POLICY "prod_own" ON productos
 //  ESTADO GLOBAL
 // ═══════════════════════════════════════════
 let USER = null; // sesión Supabase
-let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.' };
+let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.',igvOn:true };
 let PRODS = [];
 let DOCS  = [];
 let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null };
@@ -1217,6 +1251,7 @@ async function loadEmpresa(){
       sf:data.serie_factura||'F001', nf:data.num_factura||1,
       snc:data.serie_nc||'NC01', nnc:data.num_nc||1,
       waOn:data.wa_activo||false, waNum:data.wa_numero||'', waMsg:data.wa_mensaje||'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
+      igvOn: data.igv_activo !== false,
     };
     applyCfg();
     GDRIVE_TOKEN = data.gdrive_token || null;
@@ -1386,11 +1421,11 @@ async function saveCfg(){
     serie_boleta:CFG.sb, num_boleta:CFG.nb, serie_factura:CFG.sf, num_factura:CFG.nf,
     serie_nc:CFG.snc, num_nc:CFG.nnc,
     wa_activo:CFG.waOn, wa_numero:CFG.waNum, wa_mensaje:CFG.waMsg,
+    igv_activo:CFG.igvOn,
   });
   if(error){ toast('✗ Error al guardar: '+error.message); return; }
   applyCfg(); updSerie();
-  const ok=document.getElementById('sav-ok'); ok.classList.add('show'); setTimeout(()=>ok.classList.remove('show'),2400);
-  toast('✓ Configuración guardada en la nube');
+  showSuccess('¡Configuración guardada!', 'Tus datos se sincronizaron en la nube correctamente');
 }
 
 // ═══════════════════════════════════════════
@@ -1502,6 +1537,11 @@ function corrYaEmitio(){
   document.getElementById('corr-paso1').style.display = 'none';
   document.getElementById('corr-paso2-nuevo').style.display = 'none';
   document.getElementById('corr-paso2-existe').style.display = 'block';
+  // Pre-rellenar con la configuración actual de Ajustes
+  sv('corr-serie-b', CFG.sb || 'B001');
+  sv('corr-num-b', CFG.nb > 1 ? String(CFG.nb - 1) : '');
+  sv('corr-serie-f', CFG.sf || 'F001');
+  sv('corr-num-f', CFG.nf > 1 ? String(CFG.nf - 1) : '');
 }
 function corrVolver(){
   document.getElementById('corr-paso1').style.display = 'block';
@@ -1557,6 +1597,7 @@ function applyCfg(){
   sv('c-wa',CFG.waNum); sv('c-wam',CFG.waMsg);
   const ce=document.getElementById('c-env'); if(ce) ce.value=CFG.env;
   setTgEl('tg-wa',CFG.waOn);
+  setTgEl('tg-igv',CFG.igvOn);
   document.getElementById('top-ruc').textContent='RUC '+(CFG.ruc||'—');
   document.getElementById('env-lbl').textContent=CFG.env==='prod'?'Producción':'Beta';
   document.getElementById('sess-nom').textContent=CFG.nom||USER?.email||'—';
@@ -1594,11 +1635,12 @@ async function saveProd(){
       return;
     }
     PRODS.push({...data, cat:data.categoria});
-    buildCatFilters(); renderCat(); buildQT(); toast('✓ Producto guardado');
+    buildCatFilters(); renderCat(); buildQT();
     ['np-n','np-c','np-p','np-s','np-cat'].forEach(id=>sv(id,''));
     document.getElementById('np-u').value = 'NIU';
     closeOv('ov-ap');
     goTo('s-cat','cat');
+    showSuccess('¡Producto agregado!', `"${data.name}" fue añadido al catálogo`);
   } catch(err) {
     console.error('Excepción en saveProd:', err);
     toast('✗ Error inesperado: '+err.message);
@@ -1666,6 +1708,17 @@ function setTgEl(id,val){ const b=document.getElementById(id); if(b) b.className
 function updSerie(){ const s=ST.dt==='BOLETA'?CFG.sb:CFG.sf; const n=ST.dt==='BOLETA'?CFG.nb:CFG.nf; const el=document.getElementById('bill-sl'); if(el) el.textContent=`Serie ${s} · N° ${String(n).padStart(8,'0')}`; }
 function updWAHint(){ ['wa-hl','wa-hl2'].forEach(id=>{ const el=document.getElementById(id); if(!el) return; if(CFG.waOn&&CFG.waNum){el.textContent=`✓ WhatsApp activo · 51${CFG.waNum}`;el.style.color='var(--teal)';}else{el.textContent='Desactivado · activa en Config';el.style.color='var(--g600)';} }); }
 function flipWA(){ CFG.waOn=!CFG.waOn; setTgEl('tg-wa',CFG.waOn); updWAHint(); }
+function flipIGV(){ CFG.igvOn=!CFG.igvOn; setTgEl('tg-igv',CFG.igvOn); renderCart(); }
+function openFreeItem(){ sv('fl-desc',''); sv('fl-qty','1'); sv('fl-price',''); openOv('ov-free'); }
+function addFreeItem(){
+  const desc=(document.getElementById('fl-desc')?.value||'').trim();
+  const qty=parseFloat(document.getElementById('fl-qty')?.value)||1;
+  const price=parseFloat(document.getElementById('fl-price')?.value)||0;
+  if(!desc){ toast('⚠️ Ingresa una descripción'); return; }
+  if(price<=0){ toast('⚠️ Ingresa un precio válido'); return; }
+  ST.cart.push({id:'free-'+Date.now(),name:desc,price,qty,unit:'ZZ',_custom:true});
+  renderCart(); closeOv('ov-free'); toast('✓ Línea agregada');
+}
 function badge(s){ const m={ACEPTADO:['ok-b','✓'],RECHAZADO:['er-b','✕'],PENDIENTE:['pn-b','◐']}; const [c,i]=m[s]||['gy-b','·']; return `<span class="badge ${c}">${i} ${s}</span>`; }
 
 // ═══════════════════════════════════════════
@@ -1788,7 +1841,7 @@ function addP(id){ const p=PRODS.find(x=>x.id==id); if(!p) return; const ex=ST.c
 function updQ(id,d){ const it=ST.cart.find(i=>i.id==id); if(!it) return; it.qty=Math.max(1,it.qty+d); renderCart(); }
 function remI(id){ ST.cart=ST.cart.filter(i=>i.id!=id); renderCart(); }
 function clrCart(){ ST.cart=[]; renderCart(); }
-function tots(){ const total=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0); const base=total/1.18; const igv=total-base; return {sub:base,igv,total,base}; }
+function tots(){ const total=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0); const rate=CFG.igvOn?1.18:1; const base=total/rate; const igv=total-base; return {sub:base,igv,total,base}; }
 function renderCart(){
   const n=ST.cart.reduce((s,i)=>s+i.qty,0);
   const cc=document.getElementById('ccnt'); if(cc) cc.textContent=n?`(${n})`:'';
@@ -1798,6 +1851,7 @@ function renderCart(){
   if(!ST.cart.length){ document.getElementById('cart').innerHTML='<div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div>'; if(cs) cs.style.display='none'; return; }
   document.getElementById('cart').innerHTML=ST.cart.map(it=>`<div class="ci"><div class="cn"><div class="cnm">${it.name}</div><div class="cs2">S/${parseFloat(it.price).toFixed(2)} c/u</div></div><div class="qr"><button class="qb" onclick="updQ('${it.id}',-1)">−</button><span class="qn">${it.qty}</span><button class="qb" onclick="updQ('${it.id}',+1)">+</button></div><div class="ct2">S/${(parseFloat(it.price)*it.qty).toFixed(2)}</div><button class="rb" onclick="remI('${it.id}')">✕</button></div>`).join('');
   const {base,igv,total}=tots(); sv('sbase',`S/ ${base.toFixed(2)}`); sv('sigv',`S/ ${igv.toFixed(2)}`); sv('stot',`S/ ${total.toFixed(2)}`);
+  const igvLbl=document.getElementById('igv-lbl'); if(igvLbl) igvLbl.textContent=CFG.igvOn?'IGV (18%)':'IGV (0%)';
   if(cs) cs.style.display='';
 }
 function sPay(m){ ST.pay=m; ['EF','TC','YP','PL'].forEach(k=>document.getElementById('py-'+k)?.classList.toggle('on',k===m)); }
@@ -1812,7 +1866,7 @@ function buildFSum(){
     `<div class="ir"><span class="il">Pago</span><span class="iv">${pn[ST.pay]}</span></div>`+
     `<div class="div"></div>`+
     `<div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div>`+
-    `<div class="ir"><span class="il">IGV 18%</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
+    `<div class="ir"><span class="il">${CFG.igvOn?'IGV 18%':'IGV 0%'}</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
     `<div class="div"></div>`+
     `<div class="ir"><span style="font-size:15px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:23px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`;
 }
@@ -1840,8 +1894,8 @@ async function emitDoc(){
   const ns=String(num).padStart(8,'0');
   const cliente=getCliente();
   const waCl=(document.getElementById('wa-cl')?.value||document.getElementById('wa-cl2')?.value||'').trim();
-  const base=total/1.18; const igv=total-base;
-  
+  const rate=CFG.igvOn?1.18:1; const base=total/rate; const igv=total-base;
+
   // Obtener datos del cliente
   const clienteDoc = ST.dt === 'FACTURA' ? gv('ruc-cl') : gv('dni');
   const clienteTipoDoc = ST.dt === 'FACTURA' ? '6' : '1'; // 6=RUC, 1=DNI
@@ -1984,8 +2038,8 @@ function generarPDF(doc){
   const pdf = new jsPDF({ unit:'mm', format:'a4' });
   
   const total = parseFloat(doc.total||0);
-  const base = total/1.18;
-  const igv = total - base;
+  const igv = parseFloat(doc.igv ?? (total - total/1.18));
+  const base = parseFloat(doc.base_imponible ?? (total/1.18));
   const items = doc.items || [];
   
   // ── Header empresa ──
@@ -2071,7 +2125,7 @@ function generarPDF(doc){
   pdf.setFontSize(9);
   pdf.setTextColor(100, 100, 100);
   pdf.text('Op. Gravada:', 130, y); pdf.text(`S/ ${base.toFixed(2)}`, 170, y); y += 5;
-  pdf.text('IGV (18%):', 130, y); pdf.text(`S/ ${igv.toFixed(2)}`, 170, y); y += 5;
+  if(igv > 0){ pdf.text('IGV (18%):', 130, y); pdf.text(`S/ ${igv.toFixed(2)}`, 170, y); y += 5; }
   
   pdf.setDrawColor(0, 201, 167);
   pdf.setLineWidth(0.5);
@@ -2287,13 +2341,18 @@ if(ovCorr){
       document.getElementById('corr-paso2-nuevo').style.display = 'none';
       document.getElementById('corr-paso2-existe').style.display = 'none';
       sv('corr-num-b', ''); sv('corr-num-f', '');
-      sv('corr-serie-b', 'B001'); sv('corr-serie-f', 'F001');
+      sv('corr-serie-b', CFG.sb||'B001'); sv('corr-serie-f', CFG.sf||'F001');
       ovCorr.classList.remove('show');
     }
   });
 }
 let _tt;
 function toast(msg, duration=2800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), duration); }
+function showSuccess(title, sub){
+  document.getElementById('success-title').textContent = title;
+  document.getElementById('success-sub').textContent = sub || '';
+  openOv('ov-success');
+}
 function copySql(){ navigator.clipboard.writeText(SETUP_SQL).then(()=>toast('✓ SQL copiado')).catch(()=>toast('Copia el SQL manualmente')); }
 
 // ═══════════════════════════════════════════
