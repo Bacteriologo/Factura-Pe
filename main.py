@@ -1,6 +1,6 @@
 """
-FacturaPe Backend API v1.1
-Firma XML (XAdES-BES/XMLDSig) + Envío SUNAT + Consulta DNI/RUC
+FacturaPe Backend API v1.2
+Firma XML (XAdES-BES/XMLDSig) + Envío SUNAT + Consulta DNI/RUC + Certificado cifrado en Supabase
 Deploy: Railway
 """
 import os
@@ -17,10 +17,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import httpx
 
+from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.backends import default_backend
+from supabase import create_client, Client
+
 # ═══════════════════════════════════════
 #  APP CONFIG
 # ═══════════════════════════════════════
-app = FastAPI(title="FacturaPe Backend API", version="1.1.0")
+app = FastAPI(title="FacturaPe Backend API", version="1.2.0")
 
 # CORS - dominios permitidos
 ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://bacteriologo.github.io").split(",")
@@ -36,8 +42,89 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization", "Accept"],
 )
 
-# Storage temporal de certificados (en producción usar BD cifrada)
+# Storage temporal de certificados en memoria
 CERT_STORAGE: dict = {}
+
+# ═══════════════════════════════════════
+#  SUPABASE CONFIG
+# ═══════════════════════════════════════
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://kwmhqkgcyomvqkklvqtp.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3bWhxa2djeW9tdnFra2x2cXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNTQwMjEsImV4cCI6MjA4ODgzMDAyMX0.oWCmTlUgQtDHI7PXhsW53dSwmu9Y1UtPORTW8pt3VJU")
+
+try:
+    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+    print("✓ Supabase conectado correctamente")
+except Exception as e:
+    print(f"✗ Error conectando Supabase: {e}")
+    supabase = None
+
+# ═══════════════════════════════════════════════════════════════
+#  FUNCIONES DE CIFRADO AES-256-CBC
+# ═══════════════════════════════════════════════════════════════
+
+def generar_clave_desde_password(password: str, salt: bytes) -> bytes:
+    """Genera una clave AES-256 a partir de la contraseña usando PBKDF2."""
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,  # 256 bits
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    return kdf.derive(password.encode('utf-8'))
+
+
+def cifrar_certificado(cert_bytes: bytes, password: str, salt: bytes) -> str:
+    """
+    Cifra el certificado .p12 usando AES-256-CBC.
+    Retorna: base64(IV + datos_cifrados)
+    """
+    clave = generar_clave_desde_password(password, salt)
+
+    # Generar IV aleatorio de 16 bytes
+    iv = os.urandom(16)
+
+    cipher = Cipher(
+        algorithms.AES(clave),
+        modes.CBC(iv),
+        backend=default_backend()
+    )
+    encryptor = cipher.encryptor()
+
+    # Padding manual (PKCS7)
+    padding_length = 16 - (len(cert_bytes) % 16)
+    padded_data = cert_bytes + bytes([padding_length] * padding_length)
+
+    encrypted_data = encryptor.update(padded_data) + encryptor.finalize()
+
+    # Concatenar IV + datos cifrados y codificar en base64
+    combined = iv + encrypted_data
+    return base64.b64encode(combined).decode('utf-8')
+
+
+def descifrar_certificado(cert_cifrado_b64: str, password: str, salt_b64: str) -> bytes:
+    """Descifra el certificado desde base64."""
+    salt = base64.b64decode(salt_b64)
+    clave = generar_clave_desde_password(password, salt)
+
+    combined = base64.b64decode(cert_cifrado_b64)
+
+    # Separar IV (primeros 16 bytes) y datos cifrados
+    iv = combined[:16]
+    encrypted_data = combined[16:]
+
+    cipher = Cipher(
+        algorithms.AES(clave),
+        modes.CBC(iv),
+        backend=default_backend()
+    )
+    decryptor = cipher.decryptor()
+
+    padded_data = decryptor.update(encrypted_data) + decryptor.finalize()
+
+    # Remover padding
+    padding_length = padded_data[-1]
+    return padded_data[:-padding_length]
 
 # ═══════════════════════════════════════
 #  ENDPOINTS BÁSICOS
@@ -46,7 +133,7 @@ CERT_STORAGE: dict = {}
 def root():
     return {
         "servicio": "FacturaPe Backend API",
-        "version": "1.1.0",
+        "version": "1.2.0",
         "estado": "operativo",
         "timestamp": datetime.now(timezone.utc).isoformat()
     }
@@ -64,52 +151,151 @@ async def configurar_certificado(
     archivo_p12: UploadFile = File(...),
     password: str = Form(...)
 ):
+    """
+    Carga, valida y guarda cifrado el certificado digital en Supabase.
+    """
     try:
-        contenido = await archivo_p12.read()
+        cert_bytes = await archivo_p12.read()
 
-        if len(contenido) < 100:
-            return JSONResponse({"ok": False, "detail": "Archivo demasiado pequeño, no parece un certificado válido"})
+        if len(cert_bytes) < 100:
+            return JSONResponse({
+                "ok": False,
+                "detail": "Archivo demasiado pequeño, no parece un certificado válido"
+            })
 
-        # Validar que el archivo P12 es legible con la contraseña dada
-        info_cert = validar_p12(contenido, password)
+        # Validar certificado con la contraseña dada
+        info_cert = validar_p12(cert_bytes, password)
         if not info_cert["valido"]:
-            return JSONResponse({"ok": False, "detail": info_cert["error"]})
+            return JSONResponse({
+                "ok": False,
+                "code": "INVALID_CERT_PASS",
+                "detail": info_cert["error"],
+                "mensaje": "Contraseña incorrecta o certificado inválido"
+            }, status_code=400)
 
-        # Guardar en memoria (en producción: cifrar y guardar en BD)
+        dias_restantes = info_cert.get("dias_restantes")
+
+        if dias_restantes is not None and dias_restantes <= 0:
+            return JSONResponse({
+                "ok": False,
+                "code": "CERT_EXPIRED",
+                "mensaje": f"Certificado vencido desde hace {abs(dias_restantes)} días"
+            }, status_code=400)
+
+        # Guardar en memoria (para uso inmediato)
         CERT_STORAGE[empresa_id] = {
-            "p12_bytes": contenido,
+            "p12_bytes": cert_bytes,
             "password": password,
             "filename": archivo_p12.filename,
             "uploaded_at": datetime.now(timezone.utc).isoformat()
         }
 
+        # Cifrar y guardar en Supabase
+        if supabase:
+            try:
+                salt = os.urandom(32)
+                salt_b64 = base64.b64encode(salt).decode('utf-8')
+                cert_cifrado = cifrar_certificado(cert_bytes, password, salt)
+
+                supabase.table('empresas').update({
+                    'certificado_cifrado': cert_cifrado,
+                    'certificado_salt': salt_b64
+                }).eq('id', empresa_id).execute()
+
+                print(f"✓ Certificado cifrado guardado en BD para empresa {empresa_id}")
+            except Exception as e:
+                print(f"⚠️ Error guardando certificado en Supabase: {e}")
+                # No retornar error — al menos quedó en memoria
+
         return {
             "ok": True,
-            "mensaje": "Certificado cargado y validado correctamente",
+            "mensaje": "Certificado configurado y guardado correctamente",
             "subject": info_cert.get("subject", ""),
             "filename": archivo_p12.filename,
-            "dias_restantes": info_cert.get("dias_restantes")
+            "dias_restantes": dias_restantes
         }
 
     except Exception as e:
         return JSONResponse({"ok": False, "detail": str(e)}, status_code=400)
 
 
+def cargar_certificado_desde_bd(empresa_id: str, password: str) -> dict:
+    """
+    Carga y descifra el certificado desde Supabase si no está en memoria.
+    Retorna el dict para CERT_STORAGE o None si no existe/falla.
+    """
+    if not supabase:
+        return None
+
+    try:
+        response = supabase.table('empresas').select(
+            'certificado_cifrado, certificado_salt'
+        ).eq('id', empresa_id).single().execute()
+
+        if not response.data:
+            return None
+
+        cert_cifrado = response.data.get('certificado_cifrado')
+        salt_b64 = response.data.get('certificado_salt')
+
+        if not cert_cifrado or not salt_b64:
+            return None
+
+        # Descifrar
+        cert_bytes = descifrar_certificado(cert_cifrado, password, salt_b64)
+
+        # Validar que descifró correctamente
+        info = validar_p12(cert_bytes, password)
+        if not info["valido"]:
+            print(f"✗ Error validando certificado descifrado: {info['error']}")
+            return None
+
+        return {
+            "p12_bytes": cert_bytes,
+            "password": password,
+            "filename": "certificado.p12",
+            "dias_restantes": info.get("dias_restantes"),
+            "uploaded_at": datetime.now(timezone.utc).isoformat()
+        }
+
+    except Exception as e:
+        print(f"✗ Error cargando certificado desde BD: {e}")
+        return None
+
+
 @app.post("/api/eliminar-certificado")
 async def eliminar_certificado(
     empresa_id: str = Body(..., embed=True)
 ):
-    """Elimina el certificado digital de memoria."""
+    """Elimina el certificado digital de memoria y de base de datos."""
     try:
+        # Eliminar de memoria
         if empresa_id in CERT_STORAGE:
             del CERT_STORAGE[empresa_id]
+            print(f"✓ Certificado eliminado de memoria para empresa {empresa_id}")
+
+        # Eliminar de Supabase
+        if supabase:
+            try:
+                supabase.table('empresas').update({
+                    'certificado_cifrado': None,
+                    'certificado_salt': None
+                }).eq('id', empresa_id).execute()
+                print(f"✓ Certificado eliminado de BD para empresa {empresa_id}")
+            except Exception as e:
+                print(f"⚠️ Error eliminando de BD: {e}")
+
         return {"ok": True, "mensaje": "Certificado eliminado correctamente"}
+
     except Exception as e:
         return JSONResponse({
             "ok": False,
             "detail": str(e),
             "mensaje": "Error al eliminar certificado"
-        }, status_code=400)(p12_bytes: bytes, password: str) -> dict:
+        }, status_code=400)
+
+
+def validar_p12(p12_bytes: bytes, password: str) -> dict:
     """Valida que el archivo P12 sea legible con la contraseña dada.
     Devuelve subject y días restantes de validez si está disponible."""
     try:
@@ -124,7 +310,6 @@ async def eliminar_certificado(
             dias_restantes = max(0, delta.days)
         return {"valido": True, "subject": subject, "dias_restantes": dias_restantes}
     except ImportError:
-        # cryptography no disponible, omitir validación
         return {"valido": True, "subject": "", "dias_restantes": None}
     except Exception as e:
         return {"valido": False, "error": f"Certificado inválido o contraseña incorrecta: {e}"}
@@ -230,7 +415,17 @@ async def emitir_comprobante(
     descripcion_nc: str = Form(""),
     ref_tipo: str = Form(""),
     ref_numero: str = Form(""),
+    # Contraseña del certificado (opcional, para carga automática desde BD)
+    cert_password: str = Form(""),
 ):
+    # ── Intentar cargar certificado desde memoria o BD ────────────────
+    if empresa_id not in CERT_STORAGE:
+        if cert_password:
+            cert_data = cargar_certificado_desde_bd(empresa_id, cert_password)
+            if cert_data:
+                CERT_STORAGE[empresa_id] = cert_data
+                print(f"✓ Certificado cargado desde BD para empresa {empresa_id}")
+
     # ── Verificar certificado digital ────────────────────────────────
     cert = CERT_STORAGE.get(empresa_id)
     if not cert or not cert.get("p12_bytes"):
@@ -332,12 +527,11 @@ async def emitir_comprobante(
             descripcion_nc=descripcion_nc,
         )
 
-        # Firmar XML con certificado (si existe)
+        # Firmar XML con certificado
         cert = CERT_STORAGE.get(empresa_id)
         if cert:
             xml_firmado = firmar_xml(xml_content, cert["p12_bytes"], cert["password"])
         else:
-            # Sin certificado: enviar sin firma (SUNAT lo rechazará en producción)
             xml_firmado = xml_content
 
         # Crear ZIP
@@ -394,7 +588,6 @@ def generar_xml_ubl(ruc, tipo_doc, serie, numero, nombre_emisor, direccion_emiso
         price_sin_igv = round(price / 1.18, 5)
 
         if is_credit_note:
-            # UBL 2.1: CreditNote usa CreditNoteLine y CreditedQuantity
             items_xml += f"""
     <cac:CreditNoteLine>
       <cbc:ID>{idx}</cbc:ID>
@@ -607,8 +800,6 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
         )
 
         # Mover la firma a ext:ExtensionContent (requerido por SUNAT/UBL)
-        # El transform enveloped-signature excluye el nodo ds:Signature
-        # del cómputo del hash, por lo que moverlo no invalida la firma.
         ds_ns = "http://www.w3.org/2000/09/xmldsig#"
         sig_element = signed_root.find(f"{{{ds_ns}}}Signature")
 
@@ -624,11 +815,9 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
         ).decode("utf-8")
 
     except ImportError:
-        # Librerías de firma no instaladas — XML sin firma (solo beta)
         print("[WARNING] signxml/cryptography/lxml no disponibles. XML enviado sin firma.")
         return xml_content
     except Exception as e:
-        # Error durante la firma — devolver sin firma antes que bloquear la emisión
         print(f"[WARNING] Error al firmar XML: {e}")
         return xml_content
 

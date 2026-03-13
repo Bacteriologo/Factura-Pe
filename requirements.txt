@@ -5,3 +5,5 @@ python-multipart==0.0.9
 cryptography>=42.0.0
 lxml>=5.2.0
 signxml>=3.2.2
+supabase>=2.0.0
+requests>=2.31.0
