@@ -604,7 +604,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <div><label class="flbl">Clave SOL</label><input class="fi" id="c-sp" type="password" placeholder="••••••••"></div>
       </div>
       <div class="fg"><label class="flbl">Entorno SUNAT</label>
-        <select class="fsel" id="c-env"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
+        <select class="fsel" id="c-env" onchange="onEnvChange(this.value)"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
       </div>
       <div class="cfi" style="margin-top:11px">
         <div><div class="cfl">Aplicar IGV (18%)</div><div class="cfs">Desactivar en zonas de selva u operaciones exoneradas</div></div>
@@ -645,7 +645,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div style="font-size:11px;color:var(--g600);margin-bottom:11px;padding:9px;background:rgba(0,201,167,.05);border:1px solid rgba(0,201,167,.15);border-radius:8px">
         ℹ️ La numeración se incrementa automáticamente con cada emisión y se guarda en la nube. Si ya has emitido comprobantes en otro sistema, ingresa aquí el siguiente número a emitir.
       </div>
-      <div class="card fg">
+      <div class="card fg" id="num-card">
         <div style="display:flex;gap:7px;align-items:center;margin-bottom:9px">
           <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Boleta</span>
           <input class="fi" id="c-sb" placeholder="B001" style="width:72px;flex-shrink:0">
@@ -883,6 +883,57 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
     <div class="mf">
       <button class="btn bs fw" onclick="closeOv('ov-nc')">Cancelar</button>
       <button class="btn bd fw" id="btn-nc" onclick="emitNC()">📝 Emitir NC</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: CERTIFICADO CARGADO EN BETA -->
+<div class="ov" id="ov-beta-cert-ok">
+  <div class="modal" style="text-align:center">
+    <div class="mh"></div>
+    <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,201,167,.12);border:2px solid rgba(0,201,167,.3);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">🧪</div>
+    <div class="mt2">Certificado cargado</div>
+    <div class="ms2" style="margin-bottom:16px">Estás en modo <strong>Beta / Homologación</strong></div>
+    <div class="card" style="background:rgba(0,201,167,.05);border-color:rgba(0,201,167,.18);text-align:left;margin-bottom:14px;font-size:13px;line-height:1.7">
+      <div style="font-weight:600;margin-bottom:8px;color:var(--teal)">🧪 ¿Qué puedes hacer en Beta?</div>
+      <div>Emitir comprobantes de <strong>prueba</strong> enviados a SUNAT sin validez tributaria. Usa las series por defecto:</div>
+      <div style="padding:8px 0 4px 8px">• Boletas → <strong>B001</strong></div>
+      <div style="padding-bottom:8px 0 0 8px">• Facturas → <strong>F001</strong></div>
+    </div>
+    <div class="card" style="background:rgba(245,166,35,.05);border-color:rgba(245,166,35,.18);text-align:left;margin-bottom:18px;font-size:13px;line-height:1.7">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--gold)">🟢 Cuando pases a Producción</div>
+      <div>Ahí sí deberás configurar:</div>
+      <div style="padding:4px 0 0 8px">1. Tus <strong>series reales</strong> (ej: E001 para facturas)</div>
+      <div style="padding:2px 0 0 8px">2. El <strong>número inicial</strong> (el siguiente a tu último emitido)</div>
+      <div style="padding:2px 0 0 8px">3. Tus <strong>credenciales SOL de producción</strong></div>
+      <div style="margin-top:8px;color:var(--g600);font-size:11px">Te guiaremos con un asistente cuando lo hagas.</div>
+    </div>
+    <button class="btn bp fw btn-lg" onclick="closeOv('ov-beta-cert-ok')">Entendido, a probar →</button>
+  </div>
+</div>
+
+<!-- MODAL: AVISO AL CAMBIAR A PRODUCCIÓN -->
+<div class="ov" id="ov-prod-warn">
+  <div class="modal">
+    <div class="mh"></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="width:56px;height:56px;border-radius:50%;background:rgba(46,213,115,.1);border:2px solid rgba(46,213,115,.25);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">🟢</div>
+      <div class="mt2">Cambiando a Producción</div>
+      <div class="ms2">Antes de guardar y emitir, revisa lo siguiente</div>
+    </div>
+    <div class="card" style="margin-bottom:14px;font-size:13px;line-height:1.8;background:rgba(255,255,255,.02)">
+      <div style="font-weight:600;margin-bottom:8px">📋 Lista de verificación para Producción:</div>
+      <div>✅ &nbsp;<strong>Credenciales SOL reales</strong> (usuario y clave de producción)</div>
+      <div>✅ &nbsp;<strong>Serie Boleta real</strong> — la que usas en SUNAT (ej: B001)</div>
+      <div>✅ &nbsp;<strong>Serie Factura real</strong> — la que usas en SUNAT (ej: E001, F001)</div>
+      <div>✅ &nbsp;<strong>Número inicial correcto</strong> — el siguiente a tu último comprobante emitido</div>
+    </div>
+    <div class="warn-b" style="margin-bottom:16px;font-size:12px">
+      ⚠️ Emitir en producción con la serie o número incorrecto puede generar duplicados o rechazos de SUNAT.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn bs fw" onclick="closeOv('ov-prod-warn')">Revisar después</button>
+      <button class="btn bp fw" onclick="closeOv('ov-prod-warn'); document.getElementById('num-card')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver numeración →</button>
     </div>
   </div>
 </div>
@@ -1563,6 +1614,7 @@ async function acceptWelcome(){
 }
 
 async function saveCfg(){
+  const prevEnv = CFG.env; // guardar entorno anterior para detectar cambio
   CFG.ruc=gv('c-ruc'); CFG.nom=gv('c-nom'); CFG.dir=gv('c-dir'); CFG.ubi=gv('c-ubi');
   CFG.su=gv('c-su');   CFG.sp=gv('c-sp');
   CFG.env=document.getElementById('c-env')?.value||'beta';
@@ -1604,6 +1656,10 @@ async function saveCfg(){
   if(error){ toast('✗ Error al guardar: '+error.message); return; }
   applyCfg(); updSerie();
   showSuccess('¡Configuración guardada!', 'Tus datos se sincronizaron en la nube correctamente');
+  // Si el usuario acaba de cambiar de beta a producción, abrir el asistente de correlación
+  if(prevEnv === 'beta' && CFG.env === 'prod'){
+    setTimeout(() => openOv('ov-correlacion'), 900);
+  }
 }
 
 // ═══════════════════════════════════════════
@@ -1707,8 +1763,12 @@ async function subirCertificado(){
 
       toast(`✓ Certificado cargado · Vence en ${result.dias_restantes != null ? result.dias_restantes + ' días' : '—'}`);
       mostrarEstadoCert({ ok: true, filename: file.name, dias_restantes: result.dias_restantes });
-      // Mostrar asistente de correlación
-      setTimeout(() => { openOv('ov-correlacion'); }, 800);
+      // En beta: informar sobre diferencia beta/prod sin pedir correlación aún
+      // En producción: abrir el asistente de correlación
+      setTimeout(() => {
+        if(CFG.env === 'beta') openOv('ov-beta-cert-ok');
+        else openOv('ov-correlacion');
+      }, 800);
       // Limpiar campos
       fileInput.value = '';
       sv('c-cert-pass', '');
@@ -1929,6 +1989,13 @@ function updSerie(){ const s=ST.dt==='BOLETA'?CFG.sb:ST.dt==='FACTURA'?CFG.sf:CF
 function updWAHint(){ ['wa-hl','wa-hl2'].forEach(id=>{ const el=document.getElementById(id); if(!el) return; if(CFG.waOn&&CFG.waNum){el.textContent=`✓ WhatsApp activo · 51${CFG.waNum}`;el.style.color='var(--teal)';}else{el.textContent='Desactivado · activa en Config';el.style.color='var(--g600)';} }); }
 function flipWA(){ CFG.waOn=!CFG.waOn; setTgEl('tg-wa',CFG.waOn); updWAHint(); }
 function flipIGV(){ CFG.igvOn=!CFG.igvOn; setTgEl('tg-igv',CFG.igvOn); renderCart(); }
+function onEnvChange(val){
+  if(val === 'prod'){
+    openOv('ov-prod-warn');
+  } else {
+    toast('🧪 Beta / Homologación: pruebas con B001 y F001, sin validez tributaria.', 3500);
+  }
+}
 function openFreeItem(){ sv('fl-desc',''); sv('fl-qty','1'); sv('fl-price',''); openOv('ov-free'); }
 function addFreeItem(){
   const desc=(document.getElementById('fl-desc')?.value||'').trim();
@@ -2142,7 +2209,7 @@ function renderCart(){
 function sPay(m){ ST.pay=m; ['EF','TC','YP','PL'].forEach(k=>document.getElementById('py-'+k)?.classList.toggle('on',k===m)); }
 function sPay2(m){ ST.pay=m; ['EF','TC','YP','PL'].forEach(k=>document.getElementById('py2-'+k)?.classList.toggle('on',k===m)); }
 function buildFSum(){
-  const {base,igv,total}=tots(); const pn={EF:'Efectivo',TC:'Tarjeta',YP:'Yape',PL:'Plin'};
+  const {base,igv,total,discAmt}=tots(); const pn={EF:'Efectivo',TC:'Tarjeta',YP:'Yape',PL:'Plin'};
   document.getElementById('fsum').innerHTML=
     `<div class="ir"><span class="il">Tipo</span><span class="iv">${ST.dt}</span></div>`+
     `<div class="ir"><span class="il">Serie</span><span class="iv">${ST.dt==='BOLETA'?CFG.sb:ST.dt==='FACTURA'?CFG.sf:CFG.snv}</span></div>`+
