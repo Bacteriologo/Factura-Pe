@@ -2403,11 +2403,11 @@ function renderHist(){
 }
 function openDet(id){
   const d=DOCS.find(x=>x.id==id); if(!d) return;
-  const tot=parseFloat(d.total||0); const igv=tot-tot/1.18; const base=tot/1.18;
+  const tot=parseFloat(d.total||0); const igv=parseFloat(d.igv??tot-tot/1.18); const base=parseFloat(d.base_imponible??tot/1.18);
   const esNC = d.tipo === 'NOTA_CREDITO';
   const esNV = d.tipo === 'NOTA_VENTA';
   document.getElementById('det-in').innerHTML=
-    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':'📝'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':d.tipo==='NOTA_VENTA'?'🏷️':'📝'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
     `<div class="card"><div class="ir"><span class="il">Cliente</span><span class="iv">${d.cliente||'—'}</span></div><div class="ir"><span class="il">Ítems</span><span class="iv">${d.items_count||0}</span></div><div class="ir"><span class="il">Pago</span><span class="iv">${d.pago||'—'}</span></div>${d.ref_numero?`<div class="ir"><span class="il">Ref. Original</span><span class="iv">${d.ref_numero}</span></div>`:''}<div class="div"></div><div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div><div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div><div class="div"></div><div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:var(--teal)">S/ ${tot.toFixed(2)}</span></div></div>`+
     (d.cdr_hash?`<div class="ok-bx" style="font-size:12px"><span style="color:var(--g600)">CDR Hash:</span> <span style="color:var(--ok);font-weight:600">${d.cdr_hash}</span></div>`:'')+
     (esNV?`<div style="font-size:10px;color:var(--gold);background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:7px 10px;margin-bottom:8px">🏷️ Nota de Venta — documento interno, no válido ante SUNAT</div>`:'')+
@@ -2529,14 +2529,15 @@ async function emitNC(){
         fecha: new Date().toISOString(),
         cliente: NC_REF.cliente,
         total: parseFloat(total.toFixed(2)),
-        igv: parseFloat((total - total/1.18).toFixed(2)),
-        base_imponible: parseFloat((total/1.18).toFixed(2)),
+        igv: parseFloat((NC_REF.igv??total-total/1.18).toFixed(2)),
+        base_imponible: parseFloat((NC_REF.base_imponible??total/1.18).toFixed(2)),
         items_count: (NC_REF.items||[]).reduce((s,i) => s + (i.qty||1), 0),
         items: NC_REF.items || [],
         estado: 'ACEPTADO',
         pago: NC_REF.pago || 'EF',
         cdr_hash: result.cdr_hash,
         ref_numero: NC_REF.numero,
+        ruc_cliente: NC_REF.ruc_cliente || '',
       };
       
       await saveDoc(row);
