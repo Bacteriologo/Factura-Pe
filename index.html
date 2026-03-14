@@ -1227,6 +1227,7 @@ CREATE POLICY "prod_own" ON productos
 // ═══════════════════════════════════════════
 let USER = null; // sesión Supabase
 let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,snv:'NV01',nnv:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.',igvOn:true };
+let CERT_PASS = ''; // contraseña del cert en memoria (se envía con cada emisión para auto-restaurar tras reinicio del backend)
 let PRODS = [];
 let DOCS  = [];
 let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null, disc:0, courtesy:false };
@@ -1389,6 +1390,7 @@ async function loadEmpresa(){
 
     // Restaurar certificado si el backend lo perdió (Railway reinicio)
     if(data.cert_b64 && data.cert_pass && data.cert_filename){
+      CERT_PASS = data.cert_pass; // guardar en memoria para enviar con cada emisión
       mostrarEstadoCert({ ok: true, filename: data.cert_filename, dias_restantes: null });
       _restoreCert(data.cert_b64, data.cert_pass, data.cert_filename);
     }
@@ -1700,11 +1702,11 @@ async function eliminarCertificado(){
     });
     const result = await response.json();
     if(result.ok){
-      // Limpiar ambos sistemas de almacenamiento en Supabase
+      // Limpiar backup en Supabase (cert_b64/cert_pass/cert_filename son las columnas que existen)
       await db.from('empresas').update({
-        certificado_cifrado: null, certificado_salt: null,
         cert_b64: null, cert_pass: null, cert_filename: null,
       }).eq('id', USER.id);
+      CERT_PASS = ''; // limpiar de memoria
       mostrarEstadoCert(null);
       sv('c-cert-pass', '');
       const fileInput = document.getElementById('c-cert');
@@ -1734,11 +1736,12 @@ async function subirCertificado(){
   }
   
   const file = fileInput.files[0];
+  CERT_PASS = password; // guardar en memoria para enviar con cada emisión
   const formData = new FormData();
   formData.append('empresa_id', USER.id);
   formData.append('archivo_p12', file);
   formData.append('password', password);
-  
+
   toast('⟳ Cargando certificado...');
   
   try {
@@ -2325,6 +2328,7 @@ async function emitDoc(){
     const itemsParaSunat=ST.cart.map(i=>({...i,price:parseFloat((parseFloat(i.price)*discFactor).toFixed(4))}));
     formData.append('items_json', JSON.stringify(itemsParaSunat));
     formData.append('total', total.toFixed(2));
+    if(CERT_PASS) formData.append('cert_password', CERT_PASS); // permite auto-restaurar cert si el backend reinició
     
     // Llamar al backend
     const response = await fetch(`${BACKEND_URL}/api/emitir`, {

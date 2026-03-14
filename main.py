@@ -221,7 +221,9 @@ async def configurar_certificado(
 
 def cargar_certificado_desde_bd(empresa_id: str, password: str) -> dict:
     """
-    Carga y descifra el certificado desde Supabase si no está en memoria.
+    Carga el certificado desde Supabase si no está en memoria.
+    Intenta primero con el sistema cifrado (certificado_cifrado/salt),
+    luego con el backup en base64 (cert_b64/cert_pass).
     Retorna el dict para CERT_STORAGE o None si no existe/falla.
     """
     if not supabase:
@@ -229,34 +231,55 @@ def cargar_certificado_desde_bd(empresa_id: str, password: str) -> dict:
 
     try:
         response = supabase.table('empresas').select(
-            'certificado_cifrado, certificado_salt'
+            'certificado_cifrado, certificado_salt, cert_b64, cert_pass'
         ).eq('id', empresa_id).single().execute()
 
         if not response.data:
             return None
 
-        cert_cifrado = response.data.get('certificado_cifrado')
-        salt_b64 = response.data.get('certificado_salt')
+        data = response.data
 
-        if not cert_cifrado or not salt_b64:
-            return None
+        # ── Intento 1: sistema cifrado AES (backend) ──────────────────
+        cert_cifrado = data.get('certificado_cifrado')
+        salt_b64 = data.get('certificado_salt')
 
-        # Descifrar
-        cert_bytes = descifrar_certificado(cert_cifrado, password, salt_b64)
+        if cert_cifrado and salt_b64:
+            try:
+                cert_bytes = descifrar_certificado(cert_cifrado, password, salt_b64)
+                info = validar_p12(cert_bytes, password)
+                if info["valido"]:
+                    print(f"✓ Certificado cargado desde BD (cifrado) para empresa {empresa_id}")
+                    return {
+                        "p12_bytes": cert_bytes,
+                        "password": password,
+                        "filename": "certificado.p12",
+                        "dias_restantes": info.get("dias_restantes"),
+                        "uploaded_at": datetime.now(timezone.utc).isoformat()
+                    }
+            except Exception as e:
+                print(f"⚠️ Fallo al descifrar cert AES: {e} — intentando fallback b64")
 
-        # Validar que descifró correctamente
-        info = validar_p12(cert_bytes, password)
-        if not info["valido"]:
-            print(f"✗ Error validando certificado descifrado: {info['error']}")
-            return None
+        # ── Intento 2: backup base64 directo (Supabase) ───────────────
+        cert_b64_raw = data.get('cert_b64')
+        cert_pass_db = data.get('cert_pass')
 
-        return {
-            "p12_bytes": cert_bytes,
-            "password": password,
-            "filename": "certificado.p12",
-            "dias_restantes": info.get("dias_restantes"),
-            "uploaded_at": datetime.now(timezone.utc).isoformat()
-        }
+        if cert_b64_raw and cert_pass_db:
+            try:
+                cert_bytes = base64.b64decode(cert_b64_raw)
+                info = validar_p12(cert_bytes, cert_pass_db)
+                if info["valido"]:
+                    print(f"✓ Certificado cargado desde BD (b64) para empresa {empresa_id}")
+                    return {
+                        "p12_bytes": cert_bytes,
+                        "password": cert_pass_db,
+                        "filename": "certificado.p12",
+                        "dias_restantes": info.get("dias_restantes"),
+                        "uploaded_at": datetime.now(timezone.utc).isoformat()
+                    }
+            except Exception as e:
+                print(f"⚠️ Fallo al cargar cert b64: {e}")
+
+        return None
 
     except Exception as e:
         print(f"✗ Error cargando certificado desde BD: {e}")
