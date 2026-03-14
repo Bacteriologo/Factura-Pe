@@ -473,6 +473,23 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
               </div>
               <div id="cart"><div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div></div>
               <div id="csub" style="display:none;margin-top:11px;padding-top:11px;border-top:1px solid rgba(255,255,255,.07)">
+                <div class="sr" style="margin-bottom:7px">
+                  <span class="sl">Descuento</span>
+                  <div style="display:flex;align-items:center;gap:5px">
+                    <input type="number" id="disc-inp" min="0" max="100" value="0" inputmode="decimal"
+                      style="width:52px;text-align:center;background:var(--panel);border:1px solid rgba(255,255,255,.14);border-radius:6px;color:var(--txt);padding:4px 6px;font-size:13px"
+                      oninput="setDisc(this.value)">
+                    <span style="color:var(--g600);font-size:13px">%</span>
+                    <span id="disc-amt" style="color:var(--gold);font-size:12px"></span>
+                  </div>
+                </div>
+                <div class="sr" id="courtesy-row" style="display:none;margin-bottom:7px">
+                  <span class="sl">Cortesía</span>
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="courtesy-chk" onchange="setCourtesy(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--teal)">
+                    <span style="font-size:12px;color:var(--g600)">Sin costo</span>
+                  </label>
+                </div>
                 <div class="sr"><span class="sl">Base imponible</span><span class="sv2" id="sbase">S/ 0.00</span></div>
                 <div class="sr"><span class="sl" id="igv-lbl">IGV (18%)</span><span class="sv2" id="sigv">S/ 0.00</span></div>
                 <div class="sr st2"><span class="sl">TOTAL</span><span class="sv2" id="stot">S/ 0.00</span></div>
@@ -1158,7 +1175,7 @@ let USER = null; // sesión Supabase
 let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,snv:'NV01',nnv:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.',igvOn:true };
 let PRODS = [];
 let DOCS  = [];
-let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null };
+let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null, disc:0, courtesy:false };
 let GDRIVE_TOKEN = null;
 let GDRIVE_ENABLED = false;
 
@@ -2043,18 +2060,71 @@ function hDrop(){ setTimeout(()=>document.getElementById('pd').style.display='no
 function buildQT(){ document.getElementById('qtags').innerHTML=PRODS.slice(0,6).map(p=>`<span class="qtag" onclick="addP('${p.id}')">+${p.name.split(' ').slice(0,2).join(' ')}</span>`).join(''); }
 function addP(id){ const p=PRODS.find(x=>x.id==id); if(!p) return; const ex=ST.cart.find(i=>i.id==id); if(ex) ex.qty++; else ST.cart.push({...p,qty:1}); renderCart(); sv('ps',''); document.getElementById('pd').style.display='none'; }
 function updQ(id,d){ const it=ST.cart.find(i=>i.id==id); if(!it) return; it.qty=Math.max(1,it.qty+d); renderCart(); }
+function setQty(id,val){ const it=ST.cart.find(i=>i.id==id); if(!it) return; it.qty=Math.max(1,parseInt(val)||1); renderCart(); }
+function editPrice(id){
+  const it=ST.cart.find(i=>i.id==id); if(!it) return;
+  const np=prompt(`Precio unitario para "${it.name}":`, parseFloat(it.price).toFixed(2));
+  if(np===null) return;
+  const val=parseFloat(np);
+  if(isNaN(val)||val<0){ toast('⚠️ Precio no válido'); return; }
+  it.price=val; renderCart();
+}
+function setDisc(val){ ST.disc=Math.min(100,Math.max(0,parseFloat(val)||0)); renderCart(); }
+function setCourtesy(checked){ ST.courtesy=!!checked; renderCart(); }
 function remI(id){ ST.cart=ST.cart.filter(i=>i.id!=id); renderCart(); }
 function clrCart(){ ST.cart=[]; renderCart(); }
-function tots(){ const total=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0); const rate=CFG.igvOn?1.18:1; const base=total/rate; const igv=total-base; return {sub:base,igv,total,base}; }
+function tots(){
+  const raw=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0);
+  const disc=ST.disc||0;
+  const discAmt=raw*disc/100;
+  const isCourtesy=ST.courtesy&&ST.dt==='NOTA_VENTA';
+  const total=isCourtesy?0:raw-discAmt;
+  const rate=CFG.igvOn?1.18:1;
+  const base=total/rate; const igv=total-base;
+  return {sub:base,igv,total,base,discAmt,raw};
+}
 function renderCart(){
   const n=ST.cart.reduce((s,i)=>s+i.qty,0);
   const cc=document.getElementById('ccnt'); if(cc) cc.textContent=n?`(${n})`:'';
   const cb=document.getElementById('clrb'); if(cb) cb.style.display=ST.cart.length?'':'none';
   const b2=document.getElementById('btn2'); if(b2) b2.disabled=!ST.cart.length;
   const cs=document.getElementById('csub');
-  if(!ST.cart.length){ document.getElementById('cart').innerHTML='<div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div>'; if(cs) cs.style.display='none'; return; }
-  document.getElementById('cart').innerHTML=ST.cart.map(it=>`<div class="ci"><div class="cn"><div class="cnm">${it.name}</div><div class="cs2">S/${parseFloat(it.price).toFixed(2)} c/u</div></div><div class="qr"><button class="qb" onclick="updQ('${it.id}',-1)">−</button><span class="qn">${it.qty}</span><button class="qb" onclick="updQ('${it.id}',+1)">+</button></div><div class="ct2">S/${(parseFloat(it.price)*it.qty).toFixed(2)}</div><button class="rb" onclick="remI('${it.id}')">✕</button></div>`).join('');
-  const {base,igv,total}=tots();
+  if(!ST.cart.length){
+    document.getElementById('cart').innerHTML='<div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div>';
+    if(cs) cs.style.display='none'; return;
+  }
+  // Items con qty editable y precio editable por tap
+  document.getElementById('cart').innerHTML=ST.cart.map(it=>{
+    const subtotal=(parseFloat(it.price)*it.qty).toFixed(2);
+    return `<div class="ci">
+      <div class="cn">
+        <div class="cnm">${it.name}</div>
+        <div class="cs2" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px" onclick="editPrice('${it.id}')">
+          S/${parseFloat(it.price).toFixed(2)} c/u <span style="font-size:10px;opacity:.45">✏</span>
+        </div>
+      </div>
+      <div class="qr">
+        <button class="qb" onclick="updQ('${it.id}',-1)">−</button>
+        <input class="qn" type="number" min="1" value="${it.qty}"
+          style="width:38px;text-align:center;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.2);color:var(--txt);font-size:14px;font-weight:600;-moz-appearance:textfield"
+          onchange="setQty('${it.id}',this.value)" oninput="this.value=this.value.replace(/[^0-9]/,'')">
+        <button class="qb" onclick="updQ('${it.id}',+1)">+</button>
+      </div>
+      <div class="ct2">S/${subtotal}</div>
+      <button class="rb" onclick="remI('${it.id}')">✕</button>
+    </div>`;
+  }).join('');
+  // Controles de descuento y cortesía
+  const courtesyRow=document.getElementById('courtesy-row');
+  if(courtesyRow) courtesyRow.style.display=ST.dt==='NOTA_VENTA'?'':'none';
+  const discInp=document.getElementById('disc-inp');
+  if(discInp && document.activeElement!==discInp) discInp.value=ST.disc||0;
+  const chk=document.getElementById('courtesy-chk');
+  if(chk) chk.checked=ST.courtesy;
+  // Totales
+  const {base,igv,total,discAmt}=tots();
+  const discAmtEl=document.getElementById('disc-amt');
+  if(discAmtEl) discAmtEl.textContent=(ST.disc>0||ST.courtesy)?`-S/${(ST.courtesy?tots().raw:discAmt).toFixed(2)}`:'';
   ['sbase','sigv','stot'].forEach((id,i)=>{ const el=document.getElementById(id); if(el) el.textContent=`S/ ${[base,igv,total][i].toFixed(2)}`; });
   const igvLbl=document.getElementById('igv-lbl'); if(igvLbl) igvLbl.textContent=CFG.igvOn?'IGV (18%)':'IGV (0%)';
   if(cs) cs.style.display='';
@@ -2072,11 +2142,13 @@ function buildFSum(){
     `<div class="div"></div>`+
     `<div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div>`+
     `<div class="ir"><span class="il">${CFG.igvOn?'IGV 18%':'IGV 0%'}</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
+    (ST.disc>0?`<div class="ir"><span class="il" style="color:var(--gold)">Descuento ${ST.disc}%</span><span class="iv" style="color:var(--gold)">-S/ ${discAmt.toFixed(2)}</span></div>`:'') +
+    (ST.courtesy&&ST.dt==='NOTA_VENTA'?`<div class="ir"><span class="il" style="color:var(--teal)">Cortesía</span><span class="iv" style="color:var(--teal)">Sin costo</span></div>`:'') +
     `<div class="div"></div>`+
     `<div class="ir"><span style="font-size:15px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:23px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`;
 }
 function openConf(){
-  const {base,igv,total}=tots();
+  const {base,igv,total,discAmt}=tots();
   document.getElementById('conf-s').innerHTML=
     `<div class="ir"><span class="il">Tipo</span><span class="iv">${ST.dt}</span></div>`+
     `<div class="ir"><span class="il">Cliente</span><span class="iv">${getCliente()}</span></div>`+
@@ -2084,6 +2156,8 @@ function openConf(){
     `<div class="div"></div>`+
     `<div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div>`+
     `<div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
+    (ST.disc>0?`<div class="ir"><span class="il" style="color:var(--gold)">Descuento ${ST.disc}%</span><span class="iv" style="color:var(--gold)">-S/ ${discAmt.toFixed(2)}</span></div>`:'') +
+    (ST.courtesy&&ST.dt==='NOTA_VENTA'?`<div class="ir"><span class="il" style="color:var(--teal)">Cortesía</span><span class="iv" style="color:var(--teal)">Sin costo</span></div>`:'') +
     `<div class="div"></div>`+
     `<div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`;
   openOv('ov-conf');
@@ -2166,7 +2240,10 @@ async function emitDoc(){
     formData.append('cliente_nombre', cliente);
     formData.append('cliente_tipo_doc', clienteTipoDoc);
     formData.append('cliente_num_doc', clienteDoc || '-');
-    formData.append('items_json', JSON.stringify(ST.cart));
+    // Aplicar descuento proporcional a precios antes de enviar a SUNAT
+    const discFactor=1-(ST.disc||0)/100;
+    const itemsParaSunat=ST.cart.map(i=>({...i,price:parseFloat((parseFloat(i.price)*discFactor).toFixed(4))}));
+    formData.append('items_json', JSON.stringify(itemsParaSunat));
     formData.append('total', total.toFixed(2));
     
     // Llamar al backend
@@ -2267,7 +2344,7 @@ async function emitDoc(){
 
 function resetBill(){
   closeOv('ov-ok'); 
-  ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null;
+  ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null; ST.disc=0; ST.courtesy=false;
   ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2','nv-cl'].forEach(id=>sv(id,''));
   const dr=document.getElementById('dr');
   if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; }
