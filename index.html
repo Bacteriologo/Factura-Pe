@@ -595,18 +595,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       </div>
 
       <div class="cfg-t" style="margin-top:6px">Certificado Digital (.p12 / .pfx)</div>
-      <div class="warn-b">⚠️ IMPORTANTE: El certificado se carga en el backend para firma digital. Asegúrate de que el backend esté funcionando.</div>
-      <div class="fg">
-        <label class="flbl">Archivo .p12 / .pfx</label>
-        <input type="file" class="fi" id="c-cert" accept=".p12,.pfx" style="padding:9px">
+      <div id="cert-upload-form">
+        <div class="warn-b">⚠️ IMPORTANTE: El certificado se carga en el backend para firma digital. Asegúrate de que el backend esté funcionando.</div>
+        <div class="fg">
+          <label class="flbl">Archivo .p12 / .pfx</label>
+          <input type="file" class="fi" id="c-cert" accept=".p12,.pfx" style="padding:9px">
+        </div>
+        <div class="fg">
+          <label class="flbl">Contraseña del certificado</label>
+          <input class="fi" id="c-cert-pass" type="password" placeholder="••••••••">
+        </div>
+        <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
+          📤 Cargar Certificado
+        </button>
       </div>
-      <div class="fg">
-        <label class="flbl">Contraseña del certificado</label>
-        <input class="fi" id="c-cert-pass" type="password" placeholder="••••••••">
-      </div>
-      <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
-        📤 Cargar Certificado
-      </button>
       <div id="cert-status" style="margin-top:9px;display:none">
         <!-- Se llenará dinámicamente -->
       </div>
@@ -1077,6 +1079,9 @@ CREATE TABLE IF NOT EXISTS empresas (
   wa_numero TEXT DEFAULT '',
   wa_mensaje TEXT DEFAULT 'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
   igv_activo BOOLEAN DEFAULT true,
+  cert_filename TEXT,
+  cert_b64 TEXT,
+  cert_pass TEXT,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 -- ── MIGRACIÓN para bases de datos existentes ──────────────────────────
@@ -1084,6 +1089,9 @@ CREATE TABLE IF NOT EXISTS empresas (
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS igv_activo BOOLEAN DEFAULT true;
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS serie_nv TEXT DEFAULT 'NV01';
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS num_nv INT DEFAULT 1;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_filename TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_b64 TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_pass TEXT;
 
 -- 2. Tabla de comprobantes
 CREATE TABLE IF NOT EXISTS comprobantes (
@@ -1289,7 +1297,32 @@ async function loadEmpresa(){
       document.getElementById('gdrive-connected').style.display = 'block';
     }
     updateGDriveStatus();
+
+    // Restaurar certificado si el backend lo perdió (Railway reinicio)
+    if(data.cert_b64 && data.cert_pass && data.cert_filename){
+      mostrarEstadoCert({ ok: true, filename: data.cert_filename, dias_restantes: null });
+      _restoreCert(data.cert_b64, data.cert_pass, data.cert_filename);
+    }
   }
+}
+
+// Re-sube el certificado al backend en segundo plano (silencioso)
+async function _restoreCert(b64, pass, filename){
+  try {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const file  = new File([bytes], filename, { type: 'application/x-pkcs12' });
+    const fd    = new FormData();
+    fd.append('empresa_id', USER.id);
+    fd.append('archivo_p12', file);
+    fd.append('password', pass);
+    const res  = await fetch(`${BACKEND_URL}/api/configurar-certificado`, { method:'POST', body:fd });
+    const data = await res.json();
+    if(data.ok){
+      // Actualizar UI con días de vencimiento reales
+      mostrarEstadoCert({ ok: true, filename, dias_restantes: data.dias_restantes });
+    }
+    // Si falla (backend caído) se mantiene la UI con el estado de Supabase
+  } catch(e){ /* backend no disponible — silencioso */ }
 }
 
 // ═══════════════════════════════════════════
@@ -1476,8 +1509,9 @@ async function saveCfg(){
 //  CERTIFICADO DIGITAL
 // ═══════════════════════════════════════════
 function mostrarEstadoCert(data){
-  const status = document.getElementById('cert-status');
-  const delBtn = document.getElementById('cert-delete');
+  const status   = document.getElementById('cert-status');
+  const delBtn   = document.getElementById('cert-delete');
+  const upForm   = document.getElementById('cert-upload-form');
   if(!status) return;
   if(data && data.ok){
     status.innerHTML = `
@@ -1489,9 +1523,11 @@ function mostrarEstadoCert(data){
     `;
     status.style.display = 'block';
     if(delBtn) delBtn.style.display = 'block';
+    if(upForm) upForm.style.display = 'none';   // ocultar formulario de subida
   } else {
     status.style.display = 'none';
     if(delBtn) delBtn.style.display = 'none';
+    if(upForm) upForm.style.display = 'block';  // mostrar formulario de subida
   }
 }
 async function eliminarCertificado(){
@@ -1507,6 +1543,8 @@ async function eliminarCertificado(){
     });
     const result = await response.json();
     if(result.ok){
+      // Limpiar también en Supabase para que no se restaure al siguiente login
+      await db.from('empresas').update({ cert_filename: null, cert_b64: null, cert_pass: null }).eq('id', USER.id);
       mostrarEstadoCert(null);
       sv('c-cert-pass', '');
       const fileInput = document.getElementById('c-cert');
@@ -1552,8 +1590,22 @@ async function subirCertificado(){
     const result = await response.json();
     
     if(result.ok){
+      // Convertir archivo a base64 para persistir en Supabase
+      const b64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      // Guardar en Supabase para sobrevivir reinicios del backend
+      await db.from('empresas').update({
+        cert_filename: file.name,
+        cert_b64: b64,
+        cert_pass: password,
+      }).eq('id', USER.id);
+
       toast(`✓ Certificado cargado · Vence en ${result.dias_restantes != null ? result.dias_restantes + ' días' : '—'}`);
-      mostrarEstadoCert(result);
+      mostrarEstadoCert({ ok: true, filename: file.name, dias_restantes: result.dias_restantes });
       // Mostrar asistente de correlación
       setTimeout(() => { openOv('ov-correlacion'); }, 800);
       // Limpiar campos
@@ -1562,7 +1614,7 @@ async function subirCertificado(){
     } else {
       toast('✗ ' + (result.detail || result.mensaje || 'Error al cargar'));
     }
-    
+
   } catch(error){
     console.error('Error:', error);
     toast('✗ Error de conexión con el backend');
