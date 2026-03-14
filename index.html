@@ -1568,6 +1568,11 @@ async function saveCfg(){
   CFG.snc=gv('c-snc')||'NC01'; CFG.nnc=parseInt(gv('c-nnc'))||1;
   CFG.snv=gv('c-snv')||'NV01'; CFG.nnv=parseInt(gv('c-nnv'))||1;
   CFG.waNum=gv('c-wa'); CFG.waMsg=gv('c-wam');
+  // Validar formato de series (SUNAT error 1773)
+  const serieWarnings=[];
+  if(!CFG.sb.toUpperCase().startsWith('B')) serieWarnings.push(`• Serie Boleta "${CFG.sb}" debe empezar con B (ej: B001)`);
+  if(!CFG.sf.toUpperCase().startsWith('F')) serieWarnings.push(`• Serie Factura "${CFG.sf}" debe empezar con F (ej: F001)`);
+  if(serieWarnings.length) toast('⚠️ Series inválidas:\n'+serieWarnings.join('\n'), 6000);
   const payload = {
     id:USER.id, ruc:CFG.ruc, nombre:CFG.nom, direccion:CFG.dir, ubigeo:CFG.ubi,
     usuario_sol:CFG.su, clave_sol:CFG.sp, entorno:CFG.env,
@@ -2323,6 +2328,15 @@ async function emitDoc(){
         helpText = '\n\n💡 SOLUCIÓN:\n1. Ve a Configuración (⚙️)\n2. Carga tu certificado digital (.p12 o .pfx)\n3. Ingresa la contraseña del certificado\n4. Vuelve a intentar emitir';
       } else if(errorCode === 'NO_CERT_PASS'){
         helpText = '\n\n💡 SOLUCIÓN:\nVuelve a cargar el certificado en Configuración e ingresa la contraseña correcta.';
+      } else if(errorCode === '1773' || errorMsg.includes('ZIP') || errorMsg.includes('nombre del archivo') || errorMsg.includes('Serie inválida')){
+        const serieActual = ST.dt==='BOLETA' ? CFG.sb : CFG.sf;
+        const serieEsperada = ST.dt==='BOLETA' ? 'B001' : 'F001';
+        helpText = `\n\n💡 CAUSA: Serie incorrecta para ${ST.dt}\n`+
+          `Serie configurada: "${serieActual}"\n\n`+
+          `SUNAT requiere:\n`+
+          `  • Boletas  → serie B001, B002...\n`+
+          `  • Facturas → serie F001, F002...\n\n`+
+          `SOLUCIÓN: Ve a Configuración (⚙️)\ny cambia la Serie ${ST.dt==='BOLETA'?'Boleta':'Factura'} a "${serieEsperada}".`;
       } else if(errorMsg.toLowerCase().includes('firma') || errorMsg.toLowerCase().includes('signature')){
         helpText = '\n\n💡 POSIBLES CAUSAS:\n- Certificado vencido\n- Contraseña incorrecta\n- Archivo corrupto\n\nSOLUCIÓN: Recarga el certificado en Configuración';
       } else if(/^[23]\d{3}$/.test(errorCode)){
