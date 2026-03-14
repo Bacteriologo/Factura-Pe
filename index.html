@@ -424,6 +424,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
           <div class="trow">
             <button class="topt on" id="ob" onclick="setDT('BOLETA')"><span class="ti">🧾</span>BOLETA</button>
             <button class="topt" id="of" onclick="setDT('FACTURA')"><span class="ti">📄</span>FACTURA</button>
+            <button class="topt" id="onv" onclick="setDT('NOTA_VENTA')"><span class="ti">🏷️</span>NOTA VENTA</button>
           </div>
           <div id="bf">
             <label class="flbl">DNI del cliente (opcional)</label>
@@ -442,6 +443,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
               <div class="fg"><label class="flbl">Dirección</label><input class="fi" id="dir-cl" placeholder="Av. Lima 123"></div>
             </div>
           </div>
+          <div id="nvf" style="display:none">
+            <div style="font-size:11px;color:var(--gold);background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:8px 11px;margin-bottom:9px">
+              🏷️ <strong>Nota de Venta</strong> — Documento interno. No tiene validez ante SUNAT.
+            </div>
+            <label class="flbl">Nombre del cliente (opcional)</label>
+            <input class="fi" id="nv-cl" placeholder="Cliente Final">
+          </div>
         </div>
         <button class="btn bp fw btn-lg" onclick="bStep(1)">Continuar →</button>
       </div>
@@ -456,6 +464,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
                 <div class="drop" id="pd" style="display:none"></div>
               </div>
               <div class="qt" id="qtags"></div>
+              <button class="btn bs btn-sm fw" style="margin-top:9px" onclick="openFreeItem()">✏️ Añadir ítem libre</button>
             </div>
             <div class="card">
               <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:11px">
@@ -464,8 +473,25 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
               </div>
               <div id="cart"><div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div></div>
               <div id="csub" style="display:none;margin-top:11px;padding-top:11px;border-top:1px solid rgba(255,255,255,.07)">
+                <div class="sr" style="margin-bottom:7px">
+                  <span class="sl">Descuento</span>
+                  <div style="display:flex;align-items:center;gap:5px">
+                    <input type="number" id="disc-inp" min="0" max="100" value="0" inputmode="decimal"
+                      style="width:52px;text-align:center;background:var(--panel);border:1px solid rgba(255,255,255,.14);border-radius:6px;color:var(--txt);padding:4px 6px;font-size:13px"
+                      oninput="setDisc(this.value)">
+                    <span style="color:var(--g600);font-size:13px">%</span>
+                    <span id="disc-amt" style="color:var(--gold);font-size:12px"></span>
+                  </div>
+                </div>
+                <div class="sr" id="courtesy-row" style="display:none;margin-bottom:7px">
+                  <span class="sl">Cortesía</span>
+                  <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+                    <input type="checkbox" id="courtesy-chk" onchange="setCourtesy(this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:var(--teal)">
+                    <span style="font-size:12px;color:var(--g600)">Sin costo</span>
+                  </label>
+                </div>
                 <div class="sr"><span class="sl">Base imponible</span><span class="sv2" id="sbase">S/ 0.00</span></div>
-                <div class="sr"><span class="sl">IGV (18%)</span><span class="sv2" id="sigv">S/ 0.00</span></div>
+                <div class="sr"><span class="sl" id="igv-lbl">IGV (18%)</span><span class="sv2" id="sigv">S/ 0.00</span></div>
                 <div class="sr st2"><span class="sl">TOTAL</span><span class="sv2" id="stot">S/ 0.00</span></div>
               </div>
             </div>
@@ -546,6 +572,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <button class="fp" onclick="setHF(this,'BOLETA')">🧾 Boletas</button>
         <button class="fp" onclick="setHF(this,'FACTURA')">📄 Facturas</button>
         <button class="fp" onclick="setHF(this,'NOTA_CREDITO')">📝 N. Crédito</button>
+        <button class="fp" onclick="setHF(this,'NOTA_VENTA')">🏷️ N. Venta</button>
         <button class="fp" onclick="setHF(this,'ACEPTADO')">✓ Aceptados</button>
         <button class="fp" onclick="setHF(this,'RECHAZADO')">✕ Rechazados</button>
       </div>
@@ -577,22 +604,39 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <div><label class="flbl">Clave SOL</label><input class="fi" id="c-sp" type="password" placeholder="••••••••"></div>
       </div>
       <div class="fg"><label class="flbl">Entorno SUNAT</label>
-        <select class="fsel" id="c-env"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
+        <select class="fsel" id="c-env" onchange="onEnvChange(this.value)"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
+      </div>
+      <div class="cfi" style="margin-top:11px">
+        <div><div class="cfl">Aplicar IGV (18%)</div><div class="cfs">Desactivar en zonas de selva u operaciones exoneradas</div></div>
+        <button class="tg on" id="tg-igv" onclick="flipIGV()"></button>
       </div>
 
       <div class="cfg-t" style="margin-top:6px">Certificado Digital (.p12 / .pfx)</div>
-      <div class="warn-b">⚠️ IMPORTANTE: El certificado se carga en el backend para firma digital. Asegúrate de que el backend esté funcionando.</div>
-      <div class="fg">
-        <label class="flbl">Archivo .p12 / .pfx</label>
-        <input type="file" class="fi" id="c-cert" accept=".p12,.pfx" style="padding:9px">
+      <div id="cert-upload-form">
+        <div class="warn-b">⚠️ IMPORTANTE: El certificado se carga en el backend para firma digital. Asegúrate de que el backend esté funcionando.</div>
+        <div class="fg">
+          <label class="flbl">Archivo .p12 / .pfx</label>
+          <input type="file" class="fi" id="c-cert" accept=".p12,.pfx" style="padding:9px">
+        </div>
+        <div class="fg">
+          <label class="flbl">Contraseña del certificado</label>
+          <input class="fi" id="c-cert-pass" type="password" placeholder="••••••••">
+        </div>
+        <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
+          📤 Cargar Certificado
+        </button>
       </div>
-      <div class="fg">
-        <label class="flbl">Contraseña del certificado</label>
-        <input class="fi" id="c-cert-pass" type="password" placeholder="••••••••">
+      <div id="cert-status" style="margin-top:9px;display:none">
+        <!-- Se llenará dinámicamente -->
       </div>
-      <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
-        📤 Cargar Certificado
-      </button>
+      <div id="cert-delete" style="display:none;margin-top:10px">
+        <button class="btn bd btn-sm fw" onclick="eliminarCertificado()">
+          🗑️ Eliminar Certificado
+        </button>
+        <div style="font-size:11px;color:var(--g600);margin-top:6px">
+          Deberás cargarlo nuevamente para emitir comprobantes
+        </div>
+      </div>
       <div style="font-size:11px;color:var(--g600);margin-top:6px">
         Se cargará en el backend para usar en firma digital XAdES-BES
       </div>
@@ -601,7 +645,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div style="font-size:11px;color:var(--g600);margin-bottom:11px;padding:9px;background:rgba(0,201,167,.05);border:1px solid rgba(0,201,167,.15);border-radius:8px">
         ℹ️ La numeración se incrementa automáticamente con cada emisión y se guarda en la nube. Si ya has emitido comprobantes en otro sistema, ingresa aquí el siguiente número a emitir.
       </div>
-      <div class="card fg">
+      <div class="card fg" id="num-card">
         <div style="display:flex;gap:7px;align-items:center;margin-bottom:9px">
           <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Boleta</span>
           <input class="fi" id="c-sb" placeholder="B001" style="width:72px;flex-shrink:0">
@@ -614,11 +658,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
           <span style="color:var(--g600)">—</span>
           <input class="fi" id="c-nf" placeholder="000001" style="flex:1" inputmode="numeric">
         </div>
-        <div style="display:flex;gap:7px;align-items:center">
+        <div style="font-size:10px;color:var(--gold);background:rgba(255,193,7,.07);border-radius:6px;padding:6px 8px;margin-bottom:7px;line-height:1.5">
+          <b>BETA:</b> usa B001 y F001. &nbsp;<b>PRODUCCIÓN:</b> usa tu serie real (ej: E001).
+        </div>
+        <div style="display:flex;gap:7px;align-items:center;margin-bottom:9px">
           <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Nota Crédito</span>
           <input class="fi" id="c-snc" placeholder="NC01" style="width:72px;flex-shrink:0">
           <span style="color:var(--g600)">—</span>
           <input class="fi" id="c-nnc" placeholder="000001" style="flex:1" inputmode="numeric">
+        </div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Nota Venta</span>
+          <input class="fi" id="c-snv" placeholder="NV01" style="width:72px;flex-shrink:0">
+          <span style="color:var(--g600)">—</span>
+          <input class="fi" id="c-nnv" placeholder="000001" style="flex:1" inputmode="numeric">
         </div>
       </div>
 
@@ -638,6 +691,34 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <label class="flbl">Mensaje predeterminado</label>
         <textarea class="fi" id="c-wam" rows="3" style="resize:none" placeholder="Hola {nombre}, tu {tipo} N° {numero} por {total}."></textarea>
         <div style="font-size:11px;color:var(--g600);margin-top:4px">Variables: {nombre} {tipo} {numero} {total} {link}</div>
+      </div>
+
+      <div class="cfg-t" style="margin-top:6px">Google Drive (Respaldo Automático)</div>
+      <div class="warn-b" style="margin-bottom:11px">
+        📁 Los PDF de tus comprobantes se guardarán automáticamente en tu Drive
+      </div>
+      <div class="cfi">
+        <div>
+          <div class="cfl">Activar Google Drive</div>
+          <div class="cfs" id="gdrive-status">Desconectado</div>
+        </div>
+        <button class="tg off" id="tg-gdrive" onclick="flipGDrive()"></button>
+      </div>
+      <div id="gdrive-connect" style="display:none;margin-top:11px">
+        <button class="btn bp fw" onclick="connectGDrive()">
+          📁 Conectar con Google Drive
+        </button>
+        <div style="font-size:11px;color:var(--g600);margin-top:6px">
+          Ruta: /FacturaPe/Comprobantes/YYYY-MM-DD/
+        </div>
+      </div>
+      <div id="gdrive-connected" style="display:none;margin-top:11px">
+        <div class="ok-bx" style="font-size:12px">
+          ✓ Conectado - Los PDF se guardan automáticamente
+        </div>
+        <button class="btn bd btn-sm fw" onclick="disconnectGDrive()">
+          Desconectar Drive
+        </button>
       </div>
 
       <div class="cfg-t" style="margin-top:4px">Cuenta</div>
@@ -669,6 +750,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <button class="btn bs fw" onclick="closeOv('ov-conf')">Cancelar</button>
       <button class="btn bp fw" id="btn-emit" onclick="emitDoc()">Confirmar ✓</button>
     </div>
+  </div>
+</div>
+
+<!-- MODAL: ÉXITO GENÉRICO (Ajustes / Catálogo) -->
+<div class="ov" id="ov-success">
+  <div class="modal" style="text-align:center"><div class="mh"></div>
+    <div class="sring" id="success-icon">✓</div>
+    <div class="mt2" id="success-title">¡Guardado!</div>
+    <div class="ms2" id="success-sub" style="margin-bottom:18px"></div>
+    <button class="btn bp fw btn-lg" onclick="closeOv('ov-success')">Continuar</button>
   </div>
 </div>
 
@@ -709,12 +800,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   <div class="modal"><div class="mh"></div>
     <div class="mt2">Nuevo Producto</div><div class="ms2">Completa los datos</div>
     <div class="fr2 fg">
-      <div><label class="flbl">Código</label><input class="fi" id="np-c" placeholder="P010"></div>
+      <div><label class="flbl">Código <span style="font-weight:400;color:var(--g600)">(opcional)</span></label><input class="fi" id="np-c" placeholder="Auto" oninput="this.dataset.manual='1'"></div>
       <div><label class="flbl">Unidad SUNAT</label>
         <select class="fsel" id="np-u"><option value="NIU">NIU - Unidad</option><option value="ZZ">ZZ - Servicio</option><option value="KGM">KGM - Kg</option><option value="LTR">LTR - Litro</option></select>
       </div>
     </div>
-    <div class="fg"><label class="flbl">Nombre</label><input class="fi" id="np-n" placeholder="Pollo a la brasa (1/4)"></div>
+    <div class="fg"><label class="flbl">Nombre</label><input class="fi" id="np-n" placeholder="Pollo a la brasa (1/4)" oninput="onProdNameInput()"></div>
     <div class="fg"><label class="flbl">Categoría</label>
       <input class="fi" id="np-cat" placeholder="ej: PLATOS, BEBIDAS, ROPA, REPUESTOS..." list="cat-sugg">
       <datalist id="cat-sugg">
@@ -733,6 +824,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
     <div class="mf">
       <button class="btn bs fw" onclick="closeOv('ov-ap')">Cancelar</button>
       <button class="btn bp fw" onclick="saveProd()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ÍTEM LIBRE -->
+<div class="ov" id="ov-free">
+  <div class="modal"><div class="mh"></div>
+    <div class="mt2">✏️ Añadir línea libre</div><div class="ms2">Describe el producto o servicio</div>
+    <div class="fg"><label class="flbl">Descripción</label><input class="fi" id="fl-desc" placeholder="Ej: Servicio de instalación"></div>
+    <div class="fr2 fg">
+      <div><label class="flbl">Cantidad</label><input class="fi" id="fl-qty" placeholder="1" type="number" inputmode="decimal" step="0.01" min="0.01"></div>
+      <div><label class="flbl">Precio unit. (inc. IGV)</label><input class="fi" id="fl-price" placeholder="0.00" type="number" inputmode="decimal" step="0.01"></div>
+    </div>
+    <div class="mf">
+      <button class="btn bs fw" onclick="closeOv('ov-free')">Cancelar</button>
+      <button class="btn bp fw" onclick="addFreeItem()">Agregar</button>
     </div>
   </div>
 </div>
@@ -780,7 +887,223 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   </div>
 </div>
 
+<!-- MODAL: CERTIFICADO CARGADO EN BETA -->
+<div class="ov" id="ov-beta-cert-ok">
+  <div class="modal" style="text-align:center">
+    <div class="mh"></div>
+    <div style="width:60px;height:60px;border-radius:50%;background:rgba(0,201,167,.12);border:2px solid rgba(0,201,167,.3);display:flex;align-items:center;justify-content:center;font-size:28px;margin:0 auto 12px">🧪</div>
+    <div class="mt2">Certificado cargado</div>
+    <div class="ms2" style="margin-bottom:16px">Estás en modo <strong>Beta / Homologación</strong></div>
+    <div class="card" style="background:rgba(0,201,167,.05);border-color:rgba(0,201,167,.18);text-align:left;margin-bottom:14px;font-size:13px;line-height:1.7">
+      <div style="font-weight:600;margin-bottom:8px;color:var(--teal)">🧪 ¿Qué puedes hacer en Beta?</div>
+      <div>Emitir comprobantes de <strong>prueba</strong> enviados a SUNAT sin validez tributaria. Usa las series por defecto:</div>
+      <div style="padding:8px 0 4px 8px">• Boletas → <strong>B001</strong></div>
+      <div style="padding-bottom:8px 0 0 8px">• Facturas → <strong>F001</strong></div>
+    </div>
+    <div class="card" style="background:rgba(245,166,35,.05);border-color:rgba(245,166,35,.18);text-align:left;margin-bottom:18px;font-size:13px;line-height:1.7">
+      <div style="font-weight:600;margin-bottom:6px;color:var(--gold)">🟢 Cuando pases a Producción</div>
+      <div>Ahí sí deberás configurar:</div>
+      <div style="padding:4px 0 0 8px">1. Tus <strong>series reales</strong> (ej: E001 para facturas)</div>
+      <div style="padding:2px 0 0 8px">2. El <strong>número inicial</strong> (el siguiente a tu último emitido)</div>
+      <div style="padding:2px 0 0 8px">3. Tus <strong>credenciales SOL de producción</strong></div>
+      <div style="margin-top:8px;color:var(--g600);font-size:11px">Te guiaremos con un asistente cuando lo hagas.</div>
+    </div>
+    <button class="btn bp fw btn-lg" onclick="closeOv('ov-beta-cert-ok')">Entendido, a probar →</button>
+  </div>
+</div>
+
+<!-- MODAL: AVISO AL CAMBIAR A PRODUCCIÓN -->
+<div class="ov" id="ov-prod-warn">
+  <div class="modal">
+    <div class="mh"></div>
+    <div style="text-align:center;margin-bottom:16px">
+      <div style="width:56px;height:56px;border-radius:50%;background:rgba(46,213,115,.1);border:2px solid rgba(46,213,115,.25);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">🟢</div>
+      <div class="mt2">Cambiando a Producción</div>
+      <div class="ms2">Antes de guardar y emitir, revisa lo siguiente</div>
+    </div>
+    <div class="card" style="margin-bottom:14px;font-size:13px;line-height:1.8;background:rgba(255,255,255,.02)">
+      <div style="font-weight:600;margin-bottom:8px">📋 Lista de verificación para Producción:</div>
+      <div>✅ &nbsp;<strong>Credenciales SOL reales</strong> (usuario y clave de producción)</div>
+      <div>✅ &nbsp;<strong>Serie Boleta real</strong> — la que usas en SUNAT (ej: B001)</div>
+      <div>✅ &nbsp;<strong>Serie Factura real</strong> — la que usas en SUNAT (ej: E001, F001)</div>
+      <div>✅ &nbsp;<strong>Número inicial correcto</strong> — el siguiente a tu último comprobante emitido</div>
+    </div>
+    <div class="warn-b" style="margin-bottom:16px;font-size:12px">
+      ⚠️ Emitir en producción con la serie o número incorrecto puede generar duplicados o rechazos de SUNAT.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn bs fw" onclick="closeOv('ov-prod-warn')">Revisar después</button>
+      <button class="btn bp fw" onclick="closeOv('ov-prod-warn'); document.getElementById('num-card')?.scrollIntoView({behavior:'smooth',block:'center'})">Ver numeración →</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: ASISTENTE DE CORRELACIÓN -->
+<div class="ov" id="ov-correlacion">
+  <div class="modal" style="max-width:500px;max-height:88dvh;overflow-y:auto">
+    <div class="mh"></div>
+
+    <!-- PASO 1: ¿Ya emitió antes? -->
+    <div id="corr-paso1">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(245,166,35,.12);border:2px solid rgba(245,166,35,.3);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">⚠️</div>
+        <div class="mt2">Configurar Numeración</div>
+      </div>
+      <div class="ms2" style="margin-bottom:18px;text-align:center">
+        Es importante mantener la correlación correcta con SUNAT
+      </div>
+      <div class="card" style="background:rgba(245,166,35,.06);border-color:rgba(245,166,35,.18);margin-bottom:18px">
+        <div style="font-size:14px;line-height:1.7;font-weight:500;text-align:center">
+          ¿Ya has emitido boletas o facturas electrónicas antes con este RUC?
+        </div>
+      </div>
+      <div style="display:flex;gap:9px">
+        <button class="btn bs fw" onclick="corrEsNuevo()">No, es mi primera vez</button>
+        <button class="btn bp fw" onclick="corrYaEmitio()">Sí, ya emití antes</button>
+      </div>
+    </div>
+
+    <!-- PASO 2A: Usuario nuevo -->
+    <div id="corr-paso2-nuevo" style="display:none">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="width:56px;height:56px;border-radius:50%;background:rgba(46,213,115,.12);border:2px solid rgba(46,213,115,.3);display:flex;align-items:center;justify-content:center;font-size:26px;margin:0 auto 12px">✓</div>
+        <div class="mt2">¡Listo para empezar!</div>
+      </div>
+      <div class="ms2" style="margin-bottom:18px;text-align:center">La numeración comenzará desde el inicio</div>
+      <div class="ok-bx" style="font-size:13px;margin-bottom:16px">
+        <div style="font-weight:600;margin-bottom:8px">📋 Numeración inicial configurada:</div>
+        <div style="padding-left:8px">
+          <div style="margin-bottom:4px">• Boletas: <strong>B001-00000001</strong></div>
+          <div>• Facturas: <strong>F001-00000001</strong></div>
+        </div>
+      </div>
+      <button class="btn bp fw btn-lg" onclick="closeOv('ov-correlacion')">Entendido →</button>
+    </div>
+
+    <!-- PASO 2B: Ya emitió antes -->
+    <div id="corr-paso2-existe" style="display:none">
+      <div class="mt2" style="margin-bottom:6px">📋 Configurar Numeración</div>
+      <div class="ms2" style="margin-bottom:16px">Ingresa el número de tu último comprobante emitido</div>
+
+      <div class="card" style="margin-bottom:14px;font-size:12px;line-height:1.65;background:rgba(255,255,255,.02)">
+        <div style="font-weight:600;margin-bottom:9px;font-size:13px">ℹ️ ¿Dónde encuentro mi último número?</div>
+        <div style="margin-bottom:11px"><strong style="color:var(--teal)">Opción 1 - Consulta en SUNAT:</strong></div>
+        <ol style="margin-left:20px;margin-bottom:12px;color:var(--g400)">
+          <li>Ingresa a <strong>www.sunat.gob.pe</strong></li>
+          <li>Operaciones en Línea → <strong>Clave SOL</strong></li>
+          <li>Comprobantes Electrónicos → <strong>Consulta</strong></li>
+          <li>Busca tu última boleta/factura emitida</li>
+        </ol>
+        <div style="margin-bottom:6px"><strong style="color:var(--teal)">Opción 2 - Sistema anterior:</strong></div>
+        <div style="color:var(--g400)">Revisa el último comprobante que emitiste en tu sistema previo</div>
+      </div>
+
+      <div class="warn-b" style="margin-bottom:16px;font-size:12px">
+        <strong>💡 Ejemplo:</strong> Si tu última boleta fue <strong>B001-00000523</strong>, ingresa <strong>523</strong>. FacturaPe continuará desde <strong>524</strong>.
+      </div>
+
+      <div class="fg">
+        <label class="flbl">Última Boleta Emitida</label>
+        <div style="display:flex;gap:9px;align-items:center">
+          <input class="fi" id="corr-serie-b" placeholder="B001" style="width:85px" value="B001" maxlength="4">
+          <span style="color:var(--g600);font-size:18px">—</span>
+          <input class="fi" id="corr-num-b" placeholder="523" inputmode="numeric" style="flex:1">
+        </div>
+        <div style="font-size:11px;color:var(--g600);margin-top:5px">Solo el número, sin ceros. Si nunca emitiste boletas, deja en blanco.</div>
+      </div>
+
+      <div class="fg">
+        <label class="flbl">Última Factura Emitida</label>
+        <div style="display:flex;gap:9px;align-items:center">
+          <input class="fi" id="corr-serie-f" placeholder="F001" style="width:85px" value="F001" maxlength="4">
+          <span style="color:var(--g600);font-size:18px">—</span>
+          <input class="fi" id="corr-num-f" placeholder="100" inputmode="numeric" style="flex:1">
+        </div>
+        <div style="font-size:11px;color:var(--g600);margin-top:5px">Solo el número, sin ceros. Si nunca emitiste facturas, deja en blanco.</div>
+      </div>
+
+      <div style="display:flex;gap:9px;margin-top:18px">
+        <button class="btn bs" onclick="corrVolver()" style="padding:12px 16px">← Atrás</button>
+        <button class="btn bp fw btn-lg" onclick="corrGuardarNumeracion()">Guardar y Continuar →</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <div id="toast"></div>
+
+<!-- WELCOME MODAL (primera vez) -->
+<div class="ov show" id="ov-welcome" style="display:none">
+  <div class="modal" style="max-width:520px;max-height:85dvh">
+    <div style="text-align:center;margin-bottom:18px">
+      <div class="auth-logo" style="margin:0 auto 16px">FP</div>
+      <div style="font-family:Syne,sans-serif;font-size:22px;font-weight:800;margin-bottom:4px">
+        ¡Bienvenido a FacturaPe! 🎉
+      </div>
+      <div style="font-size:13px;color:var(--g600)">
+        Facturación electrónica SUNAT para Perú
+      </div>
+    </div>
+
+    <div class="card" style="max-height:280px;overflow-y:auto;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:9px">
+        📋 Términos de Uso y Privacidad
+      </div>
+      <div style="font-size:12px;line-height:1.6;color:var(--g400)">
+        <p style="margin-bottom:9px">
+          <strong>Protección de tus datos:</strong> En FacturaPe nos tomamos muy en serio la seguridad y privacidad de tu información. Todos los datos que ingreses (RUC, credenciales SOL, certificados, comprobantes) están protegidos mediante:
+        </p>
+        <ul style="margin-left:18px;margin-bottom:9px">
+          <li>Cifrado en tránsito (HTTPS/TLS)</li>
+          <li>Almacenamiento seguro en Supabase (AWS - región Lima, Perú)</li>
+          <li>Row Level Security: cada empresa solo accede a sus propios datos</li>
+          <li>Sin acceso de terceros: tu información es privada</li>
+        </ul>
+        <p style="margin-bottom:9px">
+          <strong>Uso de la información:</strong> Tus credenciales SUNAT y certificado digital se utilizan ÚNICAMENTE para firmar y enviar comprobantes electrónicos a SUNAT en tu nombre. No compartimos, vendemos ni utilizamos tu información para otros fines.
+        </p>
+        <p style="margin-bottom:9px">
+          <strong>Responsabilidad:</strong> FacturaPe es una herramienta para facilitar la emisión de comprobantes. Eres responsable de:
+        </p>
+        <ul style="margin-left:18px;margin-bottom:9px">
+          <li>Mantener tus credenciales seguras</li>
+          <li>Verificar que los comprobantes sean correctos antes de emitir</li>
+          <li>Cumplir con las obligaciones tributarias vigentes</li>
+        </ul>
+        <p style="margin-bottom:9px">
+          <strong>Soporte:</strong> Si tienes dudas o problemas, estamos aquí para ayudarte. Contáctanos a través de los canales de soporte.
+        </p>
+        <p style="margin-bottom:0">
+          Al hacer click en "Aceptar y continuar", confirmas que has leído y aceptas estos términos.
+        </p>
+      </div>
+    </div>
+
+    <div class="card" style="background:rgba(0,201,167,.05);border-color:rgba(0,201,167,.15);margin-bottom:16px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:9px;color:var(--teal)">
+        🚀 Primeros pasos
+      </div>
+      <div style="font-size:12px;line-height:1.7;color:var(--text)">
+        <strong>1. Configura tu empresa</strong><br>
+        Ve a <strong>Config (⚙️)</strong> y completa: RUC, credenciales SOL, certificado digital, series de comprobantes.
+        <br><br>
+        <strong>2. Agrega tus productos</strong><br>
+        Ve a <strong>Catálogo (📦)</strong> y crea los productos/servicios que vendes.
+        <br><br>
+        <strong>3. Emite tu primer comprobante</strong><br>
+        Ve a <strong>Emitir (✚)</strong>, selecciona productos y envía a SUNAT.
+        <br><br>
+        <strong>4. Revisa tu historial</strong><br>
+        En <strong>Historial (📋)</strong> puedes ver todos tus comprobantes, descargar PDF y exportar a Excel.
+      </div>
+    </div>
+
+    <button class="btn bp fw btn-lg" onclick="acceptWelcome()">
+      Aceptar y continuar →
+    </button>
+  </div>
+</div>
 
 <script>
 // ═══════════════════════════════════════════
@@ -794,7 +1117,13 @@ const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 // ═══════════════════════════════════════════
 const BACKEND_URL = 'https://factura-pe-production.up.railway.app';
 const { createClient } = supabase;
-const db = createClient(SB_URL, SB_KEY);
+const db = createClient(SB_URL, SB_KEY, {
+  auth: {
+    persistSession: false,   // no guardar sesión en localStorage
+    autoRefreshToken: false, // no renovar token en segundo plano
+    detectSessionInUrl: false,
+  }
+});
 
 // SQL para setup inicial (mostrar al usuario si las tablas no existen)
 const SETUP_SQL = `-- FacturaPe: ejecuta esto en Supabase → SQL Editor → New query
@@ -815,11 +1144,29 @@ CREATE TABLE IF NOT EXISTS empresas (
   num_factura INT DEFAULT 1,
   serie_nc TEXT DEFAULT 'NC01',
   num_nc INT DEFAULT 1,
+  serie_nv TEXT DEFAULT 'NV01',
+  num_nv INT DEFAULT 1,
   wa_activo BOOLEAN DEFAULT false,
   wa_numero TEXT DEFAULT '',
   wa_mensaje TEXT DEFAULT 'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
+  igv_activo BOOLEAN DEFAULT true,
+  cert_filename TEXT,
+  cert_b64 TEXT,
+  cert_pass TEXT,
+  gdrive_token TEXT,
+  gdrive_enabled BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+-- ── MIGRACIÓN para bases de datos existentes ──────────────────────────
+-- Si tu tabla ya existía antes, ejecuta estas líneas en Supabase SQL Editor:
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS igv_activo BOOLEAN DEFAULT true;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS serie_nv TEXT DEFAULT 'NV01';
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS num_nv INT DEFAULT 1;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_filename TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_b64 TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_pass TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS gdrive_token TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS gdrive_enabled BOOLEAN DEFAULT false;
 
 -- 2. Tabla de comprobantes
 CREATE TABLE IF NOT EXISTS comprobantes (
@@ -879,10 +1226,13 @@ CREATE POLICY "prod_own" ON productos
 //  ESTADO GLOBAL
 // ═══════════════════════════════════════════
 let USER = null; // sesión Supabase
-let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.' };
+let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,snv:'NV01',nnv:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.',igvOn:true };
+let CERT_PASS = ''; // contraseña del cert en memoria (se envía con cada emisión para auto-restaurar tras reinicio del backend)
 let PRODS = [];
 let DOCS  = [];
-let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null };
+let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null, disc:0, courtesy:false };
+let GDRIVE_TOKEN = null;
+let GDRIVE_ENABLED = false;
 
 const DEFAULT_PRODS = [
   {code:'P001',name:'Pollo a la brasa (1/4)', price:18.5,unit:'NIU',categoria:'PLATOS',  ico:'🍗',stock:45},
@@ -899,22 +1249,30 @@ const DEFAULT_PRODS = [
 // ═══════════════════════════════════════════
 //  INIT
 // ═══════════════════════════════════════════
-document.addEventListener('DOMContentLoaded', async () => {
+document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('sql-box').textContent = SETUP_SQL;
-  // Escuchar cambios de sesión
+
+  // persistSession:false → nunca hay sesión guardada.
+  // Cada refresh/visita nueva exige login. Solo escuchamos SIGNED_IN y SIGNED_OUT.
   db.auth.onAuthStateChange(async (event, session) => {
-    if(session?.user){
+    if(event === 'SIGNED_IN' && session?.user) {
       USER = session.user;
       await onLogin();
-    } else {
+    } else if(event === 'SIGNED_OUT' || !session) {
       USER = null;
       showAuth();
     }
   });
-  // Verificar sesión existente
-  const { data:{ session } } = await db.auth.getSession();
-  if(session?.user){ USER = session.user; await onLogin(); }
-  else showAuth();
+
+  // Retorno mobile de OAuth GDrive: restaurar sesión Supabase desde sessionStorage
+  if(window._pendingSupabaseSession){
+    // setSession dispara onAuthStateChange → SIGNED_IN → onLogin() automático
+    db.auth.setSession(window._pendingSupabaseSession);
+    window._pendingSupabaseSession = null;
+  } else {
+    // Flujo normal: pedir login
+    showAuth();
+  }
 });
 
 // ═══════════════════════════════════════════
@@ -990,6 +1348,10 @@ async function onLogin(){
   document.getElementById('cfg-email-lbl').textContent=email;
   const av=document.getElementById('sb-user');
   if(av) av.textContent=(email[0]||'U').toUpperCase();
+  await checkWelcome();
+  // Móvil: aplicar token de Google Drive pendiente tras restaurar sesión
+  const pendingGDrive = sessionStorage.getItem('_gdrive_token_pending');
+  if(pendingGDrive){ sessionStorage.removeItem('_gdrive_token_pending'); _applyGDriveToken(pendingGDrive); }
 }
 
 // ═══════════════════════════════════════════
@@ -1009,36 +1371,356 @@ async function loadEmpresa(){
       sb:data.serie_boleta||'B001', nb:data.num_boleta||1,
       sf:data.serie_factura||'F001', nf:data.num_factura||1,
       snc:data.serie_nc||'NC01', nnc:data.num_nc||1,
+      snv:data.serie_nv||'NV01', nnv:data.num_nv||1,
       waOn:data.wa_activo||false, waNum:data.wa_numero||'', waMsg:data.wa_mensaje||'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
+      igvOn: data.igv_activo !== false,
     };
     applyCfg();
+    // Restaurar config de Google Drive: DB primero, localStorage como respaldo
+    GDRIVE_TOKEN   = data.gdrive_token   || localStorage.getItem('gdrive_token')   || null;
+    GDRIVE_ENABLED = data.gdrive_enabled || localStorage.getItem('gdrive_enabled') === 'true' || false;
+    // Si el respaldo local tenía datos pero la DB no, re-sincronizar con DB
+    if(GDRIVE_TOKEN && !data.gdrive_token){
+      db.from('empresas').update({ gdrive_token: GDRIVE_TOKEN, gdrive_enabled: GDRIVE_ENABLED }).eq('id', USER.id);
+    }
+    setTgEl('tg-gdrive', GDRIVE_ENABLED);
+    document.getElementById('gdrive-connect').style.display   = (GDRIVE_ENABLED && !GDRIVE_TOKEN) ? 'block' : 'none';
+    document.getElementById('gdrive-connected').style.display = (GDRIVE_ENABLED && GDRIVE_TOKEN)  ? 'block' : 'none';
+    updateGDriveStatus();
+
+    // Restaurar certificado si el backend lo perdió (Railway reinicio)
+    if(data.cert_b64 && data.cert_pass && data.cert_filename){
+      CERT_PASS = data.cert_pass; // guardar en memoria para enviar con cada emisión
+      mostrarEstadoCert({ ok: true, filename: data.cert_filename, dias_restantes: null });
+      _restoreCert(data.cert_b64, data.cert_pass, data.cert_filename);
+    }
   }
 }
 
+// Re-sube el certificado al backend en segundo plano (silencioso)
+async function _restoreCert(b64, pass, filename){
+  try {
+    const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    const file  = new File([bytes], filename, { type: 'application/x-pkcs12' });
+    const fd    = new FormData();
+    fd.append('empresa_id', USER.id);
+    fd.append('archivo_p12', file);
+    fd.append('password', pass);
+    const res  = await fetch(`${BACKEND_URL}/api/configurar-certificado`, { method:'POST', body:fd });
+    const data = await res.json();
+    if(data.ok){
+      // Actualizar UI con días de vencimiento reales
+      mostrarEstadoCert({ ok: true, filename, dias_restantes: data.dias_restantes });
+    }
+    // Si falla (backend caído) se mantiene la UI con el estado de Supabase
+  } catch(e){ /* backend no disponible — silencioso */ }
+}
+
+// ═══════════════════════════════════════════
+//  GOOGLE DRIVE
+// ═══════════════════════════════════════════
+function flipGDrive(){
+  GDRIVE_ENABLED = !GDRIVE_ENABLED;
+  setTgEl('tg-gdrive', GDRIVE_ENABLED);
+  document.getElementById('gdrive-connect').style.display = GDRIVE_ENABLED && !GDRIVE_TOKEN ? 'block' : 'none';
+  document.getElementById('gdrive-connected').style.display = GDRIVE_ENABLED && GDRIVE_TOKEN ? 'block' : 'none';
+  updateGDriveStatus();
+  db.from('empresas').update({ gdrive_enabled: GDRIVE_ENABLED }).eq('id', USER.id);
+}
+function updateGDriveStatus(){
+  const status = document.getElementById('gdrive-status');
+  if(!status) return;
+  if(GDRIVE_TOKEN){
+    status.textContent = '✓ Conectado';
+    status.style.color = 'var(--teal)';
+  } else if(GDRIVE_ENABLED){
+    status.textContent = 'Esperando conexión...';
+    status.style.color = 'var(--gold)';
+  } else {
+    status.textContent = 'Desconectado';
+    status.style.color = 'var(--g600)';
+  }
+}
+async function connectGDrive(){
+  const CLIENT_ID    = '801045063045-ebm4t4ofp830u8ouobfvjp0fpeu37df5.apps.googleusercontent.com';
+  const REDIRECT_URI = window.location.origin + window.location.pathname;
+  const SCOPE        = 'https://www.googleapis.com/auth/drive.file';
+  const authUrl      = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}`;
+
+  const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if(!isMobile){
+    // Desktop: popup — la app principal no navega, sesión viva
+    const w = 520, h = 640;
+    const left = Math.max(0, (screen.width  - w) / 2);
+    const top  = Math.max(0, (screen.height - h) / 2);
+    window.open(authUrl, 'gdrive_oauth', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+    return;
+  }
+
+  // Móvil: window.opener=null en iOS/Android → usar redirect con puente de sesión
+  // Guardar tokens de Supabase en sessionStorage antes de salir
+  const { data:{ session } } = await db.auth.getSession();
+  if(session){
+    sessionStorage.setItem('_gdrive_session', JSON.stringify({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    }));
+  }
+  sessionStorage.setItem('_gdrive_pending', '1');
+  window.location.href = authUrl;
+}
+function disconnectGDrive(){
+  GDRIVE_TOKEN = null;
+  GDRIVE_ENABLED = false;
+  localStorage.removeItem('gdrive_token');
+  localStorage.removeItem('gdrive_enabled');
+  setTgEl('tg-gdrive', false);
+  document.getElementById('gdrive-connect').style.display = 'none';
+  document.getElementById('gdrive-connected').style.display = 'none';
+  updateGDriveStatus();
+  db.from('empresas').update({ gdrive_token: null, gdrive_enabled: false }).eq('id', USER.id);
+  toast('✓ Google Drive desconectado');
+}
+// ── OAuth return: detectar si somos popup (desktop) o redirect (móvil) ──
+(function(){
+  const hash = window.location.hash;
+  if(!hash || !hash.includes('access_token')) return;
+  const params = new URLSearchParams(hash.substring(1));
+  const token  = params.get('access_token');
+  if(!token) return;
+
+  if(window.opener){
+    // Desktop popup → enviar token al padre y cerrar
+    window.opener.postMessage({ type:'gdrive_token', token }, window.location.origin);
+    window.close();
+    return;
+  }
+
+  // Móvil redirect → guardar token GDrive y restaurar sesión Supabase
+  if(sessionStorage.getItem('_gdrive_pending')){
+    sessionStorage.removeItem('_gdrive_pending');
+    sessionStorage.setItem('_gdrive_token_pending', token);
+    const savedSess = sessionStorage.getItem('_gdrive_session');
+    if(savedSess){
+      sessionStorage.removeItem('_gdrive_session');
+      try { window._pendingSupabaseSession = JSON.parse(savedSess); } catch(e){}
+    }
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+})();
+
+// ── Ventana principal: recibir token del popup ──
+window.addEventListener('message', (e) => {
+  if(e.origin !== window.location.origin) return;
+  if(e.data?.type === 'gdrive_token' && e.data.token) _applyGDriveToken(e.data.token);
+});
+
+async function _applyGDriveToken(token){
+  GDRIVE_TOKEN   = token;
+  GDRIVE_ENABLED = true;
+  // Guardar en localStorage como respaldo inmediato (no depende de la sesión activa)
+  localStorage.setItem('gdrive_token',   token);
+  localStorage.setItem('gdrive_enabled', 'true');
+  // Sincronizar con Supabase DB (para acceso multi-dispositivo)
+  const { error } = await db.from('empresas').update({ gdrive_token: token, gdrive_enabled: true }).eq('id', USER.id);
+  if(error) console.warn('gdrive DB sync error:', error.message);
+  updateGDriveStatus();
+  setTgEl('tg-gdrive', true);
+  document.getElementById('gdrive-connect').style.display    = 'none';
+  document.getElementById('gdrive-connected').style.display  = 'block';
+  toast('✓ Google Drive conectado');
+}
+async function uploadPDFToDrive(pdfBlob, filename, docData){
+  if(!GDRIVE_TOKEN || !GDRIVE_ENABLED) return;
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const folderPath = `FacturaPe/Comprobantes/${today}`;
+    const folderId = await getOrCreateFolder(folderPath);
+    const metadata = {
+      name: filename,
+      parents: [folderId],
+      description: `${docData.tipo} ${docData.numero} - ${docData.cliente}`
+    };
+    const form = new FormData();
+    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+    form.append('file', pdfBlob);
+    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${GDRIVE_TOKEN}` },
+      body: form
+    });
+    if(response.ok){
+      const result = await response.json();
+      console.log('PDF guardado en Drive:', result.id);
+      return result.id;
+    }
+  } catch(e){
+    console.error('Error subiendo a Drive:', e);
+  }
+}
+async function getOrCreateFolder(path){
+  const parts = path.split('/');
+  let parentId = 'root';
+  for(const folderName of parts){
+    const searchResponse = await fetch(
+      `https://www.googleapis.com/drive/v3/files?q=name='${folderName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+      { headers: { 'Authorization': `Bearer ${GDRIVE_TOKEN}` } }
+    );
+    const searchData = await searchResponse.json();
+    if(searchData.files && searchData.files.length > 0){
+      parentId = searchData.files[0].id;
+    } else {
+      const createResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GDRIVE_TOKEN}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          name: folderName,
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: [parentId]
+        })
+      });
+      const createData = await createResponse.json();
+      parentId = createData.id;
+    }
+  }
+  return parentId;
+}
+
+// ═══════════════════════════════════════════
+//  WELCOME SCREEN (primera vez)
+// ═══════════════════════════════════════════
+async function checkWelcome(){
+  if(!USER) return;
+  const { data } = await db.from('empresas').select('welcome_accepted').eq('id', USER.id).single();
+  if(!data || !data.welcome_accepted){
+    document.getElementById('ov-welcome').style.display = 'flex';
+    setTimeout(() => {
+      document.getElementById('ov-welcome').classList.add('show');
+    }, 100);
+  }
+}
+async function acceptWelcome(){
+  await db.from('empresas').update({ welcome_accepted: true }).eq('id', USER.id);
+  document.getElementById('ov-welcome').classList.remove('show');
+  setTimeout(() => {
+    document.getElementById('ov-welcome').style.display = 'none';
+  }, 300);
+  toast('✓ ¡Bienvenido! Comienza configurando tu empresa');
+  setTimeout(() => {
+    goTo('s-cfg', 'cfg');
+  }, 1500);
+}
+
 async function saveCfg(){
+  const prevEnv = CFG.env; // guardar entorno anterior para detectar cambio
   CFG.ruc=gv('c-ruc'); CFG.nom=gv('c-nom'); CFG.dir=gv('c-dir'); CFG.ubi=gv('c-ubi');
   CFG.su=gv('c-su');   CFG.sp=gv('c-sp');
   CFG.env=document.getElementById('c-env')?.value||'beta';
   CFG.sb=gv('c-sb')||'B001'; CFG.nb=parseInt(gv('c-nb'))||1;
   CFG.sf=gv('c-sf')||'F001'; CFG.nf=parseInt(gv('c-nf'))||1;
   CFG.snc=gv('c-snc')||'NC01'; CFG.nnc=parseInt(gv('c-nnc'))||1;
+  CFG.snv=gv('c-snv')||'NV01'; CFG.nnv=parseInt(gv('c-nnv'))||1;
   CFG.waNum=gv('c-wa'); CFG.waMsg=gv('c-wam');
-  const { error } = await db.from('empresas').upsert({
+  // En beta: advertir si las series no tienen formato estándar (SUNAT 1773)
+  if(CFG.env==='beta'){
+    const bwarn=[];
+    if(!CFG.sb.toUpperCase().startsWith('B')) bwarn.push(`Serie Boleta "${CFG.sb}" → usa B001 para pruebas beta`);
+    if(!CFG.sf.toUpperCase().startsWith('F')) bwarn.push(`Serie Factura "${CFG.sf}" → usa F001 para pruebas beta`);
+    if(bwarn.length) toast('⚠️ Modo BETA: '+bwarn.join(' | '), 7000);
+  }
+  const payload = {
     id:USER.id, ruc:CFG.ruc, nombre:CFG.nom, direccion:CFG.dir, ubigeo:CFG.ubi,
     usuario_sol:CFG.su, clave_sol:CFG.sp, entorno:CFG.env,
     serie_boleta:CFG.sb, num_boleta:CFG.nb, serie_factura:CFG.sf, num_factura:CFG.nf,
     serie_nc:CFG.snc, num_nc:CFG.nnc,
+    serie_nv:CFG.snv, num_nv:CFG.nnv,
     wa_activo:CFG.waOn, wa_numero:CFG.waNum, wa_mensaje:CFG.waMsg,
-  });
+    igv_activo:CFG.igvOn,
+  };
+  let { error } = await db.from('empresas').upsert(payload);
+  if(error && error.message && error.message.includes('igv_activo')){
+    const { igv_activo, ...payloadSinIgv } = payload;
+    const res2 = await db.from('empresas').upsert(payloadSinIgv);
+    error = res2.error;
+    if(!error) toast('⚠️ Guardado (sin IGV — ejecuta la migración SQL en Supabase)');
+  }
+  if(error && error.message && (error.message.includes('serie_nv')||error.message.includes('num_nv'))){
+    // Columnas NV aún no existen en esta BD → guardar sin ellas (migración pendiente)
+    const { serie_nv, num_nv, ...payloadSinNv } = payload;
+    const res3 = await db.from('empresas').upsert(payloadSinNv);
+    error = res3.error;
+    if(!error) toast('⚠️ Guardado (ejecuta la migración SQL para Nota de Venta en Supabase)');
+  }
   if(error){ toast('✗ Error al guardar: '+error.message); return; }
   applyCfg(); updSerie();
-  const ok=document.getElementById('sav-ok'); ok.classList.add('show'); setTimeout(()=>ok.classList.remove('show'),2400);
-  toast('✓ Configuración guardada en la nube');
+  showSuccess('¡Configuración guardada!', 'Tus datos se sincronizaron en la nube correctamente');
+  // Si el usuario acaba de cambiar de beta a producción, abrir el asistente de correlación
+  if(prevEnv === 'beta' && CFG.env === 'prod'){
+    setTimeout(() => openOv('ov-correlacion'), 900);
+  }
 }
 
 // ═══════════════════════════════════════════
 //  CERTIFICADO DIGITAL
 // ═══════════════════════════════════════════
+function mostrarEstadoCert(data){
+  const status   = document.getElementById('cert-status');
+  const delBtn   = document.getElementById('cert-delete');
+  const upForm   = document.getElementById('cert-upload-form');
+  if(!status) return;
+  if(data && data.ok){
+    status.innerHTML = `
+      <div class="ok-bx" style="font-size:11px">
+        <div style="font-weight:600;margin-bottom:2px">✓ Certificado cargado</div>
+        <div style="opacity:.8">Archivo: ${data.filename || '—'}</div>
+        <div style="opacity:.8">Válido por: ${data.dias_restantes != null ? data.dias_restantes + ' días' : '—'}</div>
+      </div>
+    `;
+    status.style.display = 'block';
+    if(delBtn) delBtn.style.display = 'block';
+    if(upForm) upForm.style.display = 'none';   // ocultar formulario de subida
+  } else {
+    status.style.display = 'none';
+    if(delBtn) delBtn.style.display = 'none';
+    if(upForm) upForm.style.display = 'block';  // mostrar formulario de subida
+  }
+}
+async function eliminarCertificado(){
+  const confirmMsg = '¿Seguro que quieres eliminar el certificado digital?\n\n' +
+                     '⚠️ Deberás cargarlo nuevamente para poder emitir comprobantes.\n\n' +
+                     'Esta acción no se puede deshacer.';
+  if(!confirm(confirmMsg)) return;
+  try {
+    const response = await fetch(`${BACKEND_URL}/api/eliminar-certificado`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ empresa_id: USER.id })
+    });
+    const result = await response.json();
+    if(result.ok){
+      // Limpiar backup en Supabase (cert_b64/cert_pass/cert_filename son las columnas que existen)
+      await db.from('empresas').update({
+        cert_b64: null, cert_pass: null, cert_filename: null,
+      }).eq('id', USER.id);
+      CERT_PASS = ''; // limpiar de memoria
+      mostrarEstadoCert(null);
+      sv('c-cert-pass', '');
+      const fileInput = document.getElementById('c-cert');
+      if(fileInput) fileInput.value = '';
+      toast('✓ Certificado eliminado correctamente');
+    } else {
+      toast('✗ ' + (result.mensaje || 'Error al eliminar certificado'));
+    }
+  } catch(e){
+    console.error('Error eliminando certificado:', e);
+    toast('✗ Error de conexión al eliminar certificado');
+  }
+}
+
 async function subirCertificado(){
   const fileInput = document.getElementById('c-cert');
   const password = gv('c-cert-pass');
@@ -1054,11 +1736,12 @@ async function subirCertificado(){
   }
   
   const file = fileInput.files[0];
+  CERT_PASS = password; // guardar en memoria para enviar con cada emisión
   const formData = new FormData();
   formData.append('empresa_id', USER.id);
   formData.append('archivo_p12', file);
   formData.append('password', password);
-  
+
   toast('⟳ Cargando certificado...');
   
   try {
@@ -1070,18 +1753,102 @@ async function subirCertificado(){
     const result = await response.json();
     
     if(result.ok){
-      toast(`✓ Certificado cargado · Vence en ${result.dias_restantes} días`);
+      // Convertir archivo a base64 para persistir en Supabase
+      const b64 = await new Promise((res, rej) => {
+        const reader = new FileReader();
+        reader.onload = () => res(reader.result.split(',')[1]);
+        reader.onerror = rej;
+        reader.readAsDataURL(file);
+      });
+      // Guardar en Supabase para sobrevivir reinicios del backend
+      await db.from('empresas').update({
+        cert_filename: file.name,
+        cert_b64: b64,
+        cert_pass: password,
+      }).eq('id', USER.id);
+
+      toast(`✓ Certificado cargado · Vence en ${result.dias_restantes != null ? result.dias_restantes + ' días' : '—'}`);
+      mostrarEstadoCert({ ok: true, filename: file.name, dias_restantes: result.dias_restantes });
+      // En beta: informar sobre diferencia beta/prod sin pedir correlación aún
+      // En producción: abrir el asistente de correlación
+      setTimeout(() => {
+        if(CFG.env === 'beta') openOv('ov-beta-cert-ok');
+        else openOv('ov-correlacion');
+      }, 800);
       // Limpiar campos
       fileInput.value = '';
       sv('c-cert-pass', '');
     } else {
       toast('✗ ' + (result.detail || result.mensaje || 'Error al cargar'));
     }
-    
+
   } catch(error){
     console.error('Error:', error);
     toast('✗ Error de conexión con el backend');
   }
+}
+
+// ═══════════════════════════════════════════
+//  ASISTENTE DE CORRELACIÓN
+// ═══════════════════════════════════════════
+function corrEsNuevo(){
+  document.getElementById('corr-paso1').style.display = 'none';
+  document.getElementById('corr-paso2-nuevo').style.display = 'block';
+  document.getElementById('corr-paso2-existe').style.display = 'none';
+}
+function corrYaEmitio(){
+  document.getElementById('corr-paso1').style.display = 'none';
+  document.getElementById('corr-paso2-nuevo').style.display = 'none';
+  document.getElementById('corr-paso2-existe').style.display = 'block';
+  // Pre-rellenar con la configuración actual de Ajustes
+  sv('corr-serie-b', CFG.sb || 'B001');
+  sv('corr-num-b', CFG.nb > 1 ? String(CFG.nb - 1) : '');
+  sv('corr-serie-f', CFG.sf || 'F001');
+  sv('corr-num-f', CFG.nf > 1 ? String(CFG.nf - 1) : '');
+}
+function corrVolver(){
+  document.getElementById('corr-paso1').style.display = 'block';
+  document.getElementById('corr-paso2-nuevo').style.display = 'none';
+  document.getElementById('corr-paso2-existe').style.display = 'none';
+}
+async function corrGuardarNumeracion(){
+  const serieB = (gv('corr-serie-b') || 'B001').toUpperCase().trim();
+  const numBStr = gv('corr-num-b').trim();
+  const serieF = (gv('corr-serie-f') || 'F001').toUpperCase().trim();
+  const numFStr = gv('corr-num-f').trim();
+
+  const numB = numBStr ? parseInt(numBStr) : 0;
+  const numF = numFStr ? parseInt(numFStr) : 0;
+
+  if(numB <= 0 && numF <= 0){
+    toast('⚠️ Debes ingresar al menos un número válido');
+    return;
+  }
+
+  const siguienteB = numB > 0 ? numB + 1 : 1;
+  const siguienteF = numF > 0 ? numF + 1 : 1;
+
+  const { error } = await db.from('empresas').update({
+    serie_boleta: serieB,
+    num_boleta: siguienteB,
+    serie_factura: serieF,
+    num_factura: siguienteF
+  }).eq('id', USER.id);
+
+  if(error){
+    console.error('Error guardando numeración:', error);
+    toast('✗ Error al guardar numeración');
+    return;
+  }
+
+  CFG.sb = serieB; CFG.nb = siguienteB;
+  CFG.sf = serieF; CFG.nf = siguienteF;
+  sv('c-sb', serieB); sv('c-nb', pad(siguienteB));
+  sv('c-sf', serieF); sv('c-nf', pad(siguienteF));
+  updSerie();
+
+  toast('✓ Numeración configurada correctamente');
+  closeOv('ov-correlacion');
 }
 
 function applyCfg(){
@@ -1090,9 +1857,11 @@ function applyCfg(){
   sv('c-sb',CFG.sb);   sv('c-nb',pad(CFG.nb));
   sv('c-sf',CFG.sf);   sv('c-nf',pad(CFG.nf));
   sv('c-snc',CFG.snc); sv('c-nnc',pad(CFG.nnc));
+  sv('c-snv',CFG.snv); sv('c-nnv',pad(CFG.nnv));
   sv('c-wa',CFG.waNum); sv('c-wam',CFG.waMsg);
   const ce=document.getElementById('c-env'); if(ce) ce.value=CFG.env;
   setTgEl('tg-wa',CFG.waOn);
+  setTgEl('tg-igv',CFG.igvOn);
   document.getElementById('top-ruc').textContent='RUC '+(CFG.ruc||'—');
   document.getElementById('env-lbl').textContent=CFG.env==='prod'?'Producción':'Beta';
   document.getElementById('sess-nom').textContent=CFG.nom||USER?.email||'—';
@@ -1114,31 +1883,53 @@ async function insertDefaultProds(uid){
   await db.from('productos').insert(rows);
 }
 
+// Genera un código relacionado con el nombre: iniciales de palabras + número correlativo
+function genCode(name){
+  const clean = name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9\s]/g,' ');
+  const words  = clean.split(/\s+/).filter(w => w.length > 1);
+  let prefix = words.slice(0, 3).map(w => w[0].toUpperCase()).join('');
+  if(prefix.length < 2) prefix = clean.replace(/\s/g,'').slice(0, 3).toUpperCase();
+  if(!prefix) prefix = 'P';
+  const nums = PRODS.filter(p => p.code?.toUpperCase().startsWith(prefix))
+                    .map(p => parseInt(p.code.slice(prefix.length)) || 0);
+  const next = nums.length ? Math.max(...nums) + 1 : 1;
+  return prefix + String(next).padStart(3, '0');
+}
+function onProdNameInput(){
+  const name   = (document.getElementById('np-n')?.value || '').trim();
+  const codeEl = document.getElementById('np-c');
+  if(!codeEl || codeEl.dataset.manual) return; // el usuario ya escribió su propio código
+  codeEl.value = name.length >= 2 ? genCode(name) : '';
+}
+
 async function saveProd(){
-  const name=document.getElementById('np-n')?.value.trim();
+  const name=(document.getElementById('np-n')?.value||'').trim();
   const price=parseFloat(document.getElementById('np-p')?.value)||0;
   if(!name||price<=0){ toast('⚠️ Completa nombre y precio'); return; }
-  const catVal = (gv('np-cat') || 'PRODUCTOS').trim().toUpperCase();
-  const row={ empresa_id:USER.id, code:gv('np-c')||'P'+Date.now().toString(36).slice(-4).toUpperCase(),
-    name, price, unit:gv('np-u')||'NIU', categoria:catVal, ico:'📦', stock:parseInt(gv('np-s'))||0 };
+  if(!USER){ toast('⚠️ Sesión expirada, recarga la página'); return; }
   try {
+    const catVal = (gv('np-cat') || 'PRODUCTOS').trim().toUpperCase();
+    const row={ empresa_id:USER.id, code:gv('np-c')||genCode(name),
+      name, price, unit:gv('np-u')||'NIU', categoria:catVal, ico:'📦', stock:parseInt(gv('np-s'))||0, activo:true };
     const { data, error } = await db.from('productos').insert([row]).select().single();
-    if(error){ 
+    if(error){
       console.error('Error guardando producto:', error);
-      toast('✗ Error al guardar'); 
-      return; 
+      const msg = error.message || error.code || JSON.stringify(error);
+      alert('⚠️ No se pudo guardar el producto:\n\n'+msg+'\n\nRevisa la consola (F12) para más detalles.');
+      return;
     }
     PRODS.push({...data, cat:data.categoria});
-    buildCatFilters(); renderCat(); buildQT(); toast('✓ Producto guardado');
-    // Limpiar formulario
+    ST.cf = 'TODOS'; ST.cq = '';
+    buildCatFilters(); renderCat(); buildQT();
     ['np-n','np-c','np-p','np-s','np-cat'].forEach(id=>sv(id,''));
-    document.getElementById('np-u').value = 'NIU'; // Reset select
-    // Cerrar modal y volver al catálogo
+    document.getElementById('np-c').dataset.manual = '';
+    document.getElementById('np-u').value = 'NIU';
     closeOv('ov-ap');
     goTo('s-cat','cat');
+    showSuccess('¡Producto agregado!', `"${data.name}" fue añadido al catálogo`);
   } catch(err) {
     console.error('Excepción en saveProd:', err);
-    toast('✗ Error inesperado');
+    toast('✗ Error inesperado: '+err.message);
   }
 }
 
@@ -1200,10 +1991,28 @@ const gv  = id=>document.getElementById(id)?.value||'';
 const sv  = (id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
 const pad = n=>String(n||1).padStart(6,'0');
 function setTgEl(id,val){ const b=document.getElementById(id); if(b) b.className='tg '+(val?'on':'off'); }
-function updSerie(){ const s=ST.dt==='BOLETA'?CFG.sb:CFG.sf; const n=ST.dt==='BOLETA'?CFG.nb:CFG.nf; const el=document.getElementById('bill-sl'); if(el) el.textContent=`Serie ${s} · N° ${String(n).padStart(8,'0')}`; }
+function updSerie(){ const s=ST.dt==='BOLETA'?CFG.sb:ST.dt==='FACTURA'?CFG.sf:CFG.snv; const n=ST.dt==='BOLETA'?CFG.nb:ST.dt==='FACTURA'?CFG.nf:CFG.nnv; const el=document.getElementById('bill-sl'); if(el) el.textContent=`Serie ${s} · N° ${String(n).padStart(8,'0')}`; }
 function updWAHint(){ ['wa-hl','wa-hl2'].forEach(id=>{ const el=document.getElementById(id); if(!el) return; if(CFG.waOn&&CFG.waNum){el.textContent=`✓ WhatsApp activo · 51${CFG.waNum}`;el.style.color='var(--teal)';}else{el.textContent='Desactivado · activa en Config';el.style.color='var(--g600)';} }); }
 function flipWA(){ CFG.waOn=!CFG.waOn; setTgEl('tg-wa',CFG.waOn); updWAHint(); }
-function badge(s){ const m={ACEPTADO:['ok-b','✓'],RECHAZADO:['er-b','✕'],PENDIENTE:['pn-b','◐']}; const [c,i]=m[s]||['gy-b','·']; return `<span class="badge ${c}">${i} ${s}</span>`; }
+function flipIGV(){ CFG.igvOn=!CFG.igvOn; setTgEl('tg-igv',CFG.igvOn); renderCart(); }
+function onEnvChange(val){
+  if(val === 'prod'){
+    openOv('ov-prod-warn');
+  } else {
+    toast('🧪 Beta / Homologación: pruebas con B001 y F001, sin validez tributaria.', 3500);
+  }
+}
+function openFreeItem(){ sv('fl-desc',''); sv('fl-qty','1'); sv('fl-price',''); openOv('ov-free'); }
+function addFreeItem(){
+  const desc=(document.getElementById('fl-desc')?.value||'').trim();
+  const qty=parseFloat(document.getElementById('fl-qty')?.value)||1;
+  const price=parseFloat(document.getElementById('fl-price')?.value)||0;
+  if(!desc){ toast('⚠️ Ingresa una descripción'); return; }
+  if(price<=0){ toast('⚠️ Ingresa un precio válido'); return; }
+  ST.cart.push({id:'free-'+Date.now(),name:desc,price,qty,unit:'ZZ',_custom:true});
+  renderCart(); closeOv('ov-free'); toast('✓ Línea agregada');
+}
+function badge(s){ const m={ACEPTADO:['ok-b','✓'],RECHAZADO:['er-b','✕'],PENDIENTE:['pn-b','◐'],EMITIDO:['gy-b','🏷']}; const [c,i]=m[s]||['gy-b','·']; return `<span class="badge ${c}">${i} ${s}</span>`; }
 
 // ═══════════════════════════════════════════
 //  DASHBOARD
@@ -1253,13 +2062,24 @@ function buildDash(){
 
   const rl=document.getElementById('rec-list');
   if(!DOCS.length){ rl.innerHTML='<div class="empty" style="padding:14px 0"><div class="ei">📋</div><div class="et">Sin comprobantes aún</div></div>'; return; }
-  rl.innerHTML=DOCS.slice(0,4).map(d=>`<div class="ri"><div class="ri-ico" style="background:${d.tipo==='BOLETA'?'rgba(0,201,167,.1)':'rgba(74,158,255,.1)'}">${d.tipo==='BOLETA'?'🧾':'📄'}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.numero}</div><div style="font-size:10px;color:var(--g600)">${d.cliente||'—'}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:var(--teal)">S/${parseFloat(d.total||0).toFixed(2)}</div>${badge(d.estado||'ACEPTADO')}</div></div>`).join('');
+  const icoDoc=t=>t==='BOLETA'?'🧾':t==='FACTURA'?'📄':t==='NOTA_VENTA'?'🏷️':'📝';
+  const bgDoc=t=>t==='BOLETA'?'rgba(0,201,167,.1)':t==='NOTA_VENTA'?'rgba(251,191,36,.1)':'rgba(74,158,255,.1)';
+  rl.innerHTML=DOCS.slice(0,4).map(d=>`<div class="ri"><div class="ri-ico" style="background:${bgDoc(d.tipo)}">${icoDoc(d.tipo)}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.numero}</div><div style="font-size:10px;color:var(--g600)">${d.cliente||'—'}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:var(--teal)">S/${parseFloat(d.total||0).toFixed(2)}</div>${badge(d.estado||'ACEPTADO')}</div></div>`).join('');
 }
 
 // ═══════════════════════════════════════════
 //  BILLING
 // ═══════════════════════════════════════════
-function setDT(t){ ST.dt=t; document.getElementById('ob').classList.toggle('on',t==='BOLETA'); document.getElementById('of').classList.toggle('on',t==='FACTURA'); document.getElementById('bf').style.display=t==='BOLETA'?'':'none'; document.getElementById('ff').style.display=t==='FACTURA'?'':'none'; updSerie(); }
+function setDT(t){
+  ST.dt=t;
+  document.getElementById('ob').classList.toggle('on',t==='BOLETA');
+  document.getElementById('of').classList.toggle('on',t==='FACTURA');
+  document.getElementById('onv').classList.toggle('on',t==='NOTA_VENTA');
+  document.getElementById('bf').style.display=t==='BOLETA'?'':'none';
+  document.getElementById('ff').style.display=t==='FACTURA'?'':'none';
+  document.getElementById('nvf').style.display=t==='NOTA_VENTA'?'':'none';
+  updSerie();
+}
 
 function bStep(n){
   ST.step=n;
@@ -1272,7 +2092,7 @@ function bStep(n){
   document.getElementById('s-bill').scrollTop=0;
 }
 
-function getCliente(){ const raz=document.getElementById('razon')?.value; const dni=document.getElementById('dni')?.value; const dr=document.getElementById('dr'); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; return 'Cliente Final'; }
+function getCliente(){ if(ST.dt==='NOTA_VENTA'){ const nv=(document.getElementById('nv-cl')?.value||'').trim(); return nv||'Cliente Final'; } const raz=document.getElementById('razon')?.value; const dni=document.getElementById('dni')?.value; const dr=document.getElementById('dr'); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; return 'Cliente Final'; }
 
 async function lookDni(){
   const v=document.getElementById('dni').value.trim(), r=document.getElementById('dr');
@@ -1323,38 +2143,95 @@ function hDrop(){ setTimeout(()=>document.getElementById('pd').style.display='no
 function buildQT(){ document.getElementById('qtags').innerHTML=PRODS.slice(0,6).map(p=>`<span class="qtag" onclick="addP('${p.id}')">+${p.name.split(' ').slice(0,2).join(' ')}</span>`).join(''); }
 function addP(id){ const p=PRODS.find(x=>x.id==id); if(!p) return; const ex=ST.cart.find(i=>i.id==id); if(ex) ex.qty++; else ST.cart.push({...p,qty:1}); renderCart(); sv('ps',''); document.getElementById('pd').style.display='none'; }
 function updQ(id,d){ const it=ST.cart.find(i=>i.id==id); if(!it) return; it.qty=Math.max(1,it.qty+d); renderCart(); }
+function setQty(id,val){ const it=ST.cart.find(i=>i.id==id); if(!it) return; it.qty=Math.max(1,parseInt(val)||1); renderCart(); }
+function editPrice(id){
+  const it=ST.cart.find(i=>i.id==id); if(!it) return;
+  const np=prompt(`Precio unitario para "${it.name}":`, parseFloat(it.price).toFixed(2));
+  if(np===null) return;
+  const val=parseFloat(np);
+  if(isNaN(val)||val<0){ toast('⚠️ Precio no válido'); return; }
+  it.price=val; renderCart();
+}
+function setDisc(val){ ST.disc=Math.min(100,Math.max(0,parseFloat(val)||0)); renderCart(); }
+function setCourtesy(checked){ ST.courtesy=!!checked; renderCart(); }
 function remI(id){ ST.cart=ST.cart.filter(i=>i.id!=id); renderCart(); }
 function clrCart(){ ST.cart=[]; renderCart(); }
-function tots(){ const total=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0); const base=total/1.18; const igv=total-base; return {sub:base,igv,total,base}; }
+function tots(){
+  const raw=ST.cart.reduce((s,i)=>s+parseFloat(i.price)*i.qty,0);
+  const disc=ST.disc||0;
+  const discAmt=raw*disc/100;
+  const isCourtesy=ST.courtesy&&ST.dt==='NOTA_VENTA';
+  const total=isCourtesy?0:raw-discAmt;
+  const rate=CFG.igvOn?1.18:1;
+  const base=total/rate; const igv=total-base;
+  return {sub:base,igv,total,base,discAmt,raw};
+}
 function renderCart(){
   const n=ST.cart.reduce((s,i)=>s+i.qty,0);
   const cc=document.getElementById('ccnt'); if(cc) cc.textContent=n?`(${n})`:'';
   const cb=document.getElementById('clrb'); if(cb) cb.style.display=ST.cart.length?'':'none';
   const b2=document.getElementById('btn2'); if(b2) b2.disabled=!ST.cart.length;
   const cs=document.getElementById('csub');
-  if(!ST.cart.length){ document.getElementById('cart').innerHTML='<div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div>'; if(cs) cs.style.display='none'; return; }
-  document.getElementById('cart').innerHTML=ST.cart.map(it=>`<div class="ci"><div class="cn"><div class="cnm">${it.name}</div><div class="cs2">S/${parseFloat(it.price).toFixed(2)} c/u</div></div><div class="qr"><button class="qb" onclick="updQ('${it.id}',-1)">−</button><span class="qn">${it.qty}</span><button class="qb" onclick="updQ('${it.id}',+1)">+</button></div><div class="ct2">S/${(parseFloat(it.price)*it.qty).toFixed(2)}</div><button class="rb" onclick="remI('${it.id}')">✕</button></div>`).join('');
-  const {base,igv,total}=tots(); sv('sbase',`S/ ${base.toFixed(2)}`); sv('sigv',`S/ ${igv.toFixed(2)}`); sv('stot',`S/ ${total.toFixed(2)}`);
+  if(!ST.cart.length){
+    document.getElementById('cart').innerHTML='<div class="empty" style="padding:20px 0"><div class="ei">🛒</div><div class="et">Carrito vacío</div></div>';
+    if(cs) cs.style.display='none'; return;
+  }
+  // Items con qty editable y precio editable por tap
+  document.getElementById('cart').innerHTML=ST.cart.map(it=>{
+    const subtotal=(parseFloat(it.price)*it.qty).toFixed(2);
+    return `<div class="ci">
+      <div class="cn">
+        <div class="cnm">${it.name}</div>
+        <div class="cs2" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px" onclick="editPrice('${it.id}')">
+          S/${parseFloat(it.price).toFixed(2)} c/u <span style="font-size:10px;opacity:.45">✏</span>
+        </div>
+      </div>
+      <div class="qr">
+        <button class="qb" onclick="updQ('${it.id}',-1)">−</button>
+        <input class="qn" type="number" min="1" value="${it.qty}"
+          style="width:38px;text-align:center;background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.2);color:var(--txt);font-size:14px;font-weight:600;-moz-appearance:textfield"
+          onchange="setQty('${it.id}',this.value)" oninput="this.value=this.value.replace(/[^0-9]/,'')">
+        <button class="qb" onclick="updQ('${it.id}',+1)">+</button>
+      </div>
+      <div class="ct2">S/${subtotal}</div>
+      <button class="rb" onclick="remI('${it.id}')">✕</button>
+    </div>`;
+  }).join('');
+  // Controles de descuento y cortesía
+  const courtesyRow=document.getElementById('courtesy-row');
+  if(courtesyRow) courtesyRow.style.display=ST.dt==='NOTA_VENTA'?'':'none';
+  const discInp=document.getElementById('disc-inp');
+  if(discInp && document.activeElement!==discInp) discInp.value=ST.disc||0;
+  const chk=document.getElementById('courtesy-chk');
+  if(chk) chk.checked=ST.courtesy;
+  // Totales
+  const {base,igv,total,discAmt}=tots();
+  const discAmtEl=document.getElementById('disc-amt');
+  if(discAmtEl) discAmtEl.textContent=(ST.disc>0||ST.courtesy)?`-S/${(ST.courtesy?tots().raw:discAmt).toFixed(2)}`:'';
+  ['sbase','sigv','stot'].forEach((id,i)=>{ const el=document.getElementById(id); if(el) el.textContent=`S/ ${[base,igv,total][i].toFixed(2)}`; });
+  const igvLbl=document.getElementById('igv-lbl'); if(igvLbl) igvLbl.textContent=CFG.igvOn?'IGV (18%)':'IGV (0%)';
   if(cs) cs.style.display='';
 }
 function sPay(m){ ST.pay=m; ['EF','TC','YP','PL'].forEach(k=>document.getElementById('py-'+k)?.classList.toggle('on',k===m)); }
 function sPay2(m){ ST.pay=m; ['EF','TC','YP','PL'].forEach(k=>document.getElementById('py2-'+k)?.classList.toggle('on',k===m)); }
 function buildFSum(){
-  const {base,igv,total}=tots(); const pn={EF:'Efectivo',TC:'Tarjeta',YP:'Yape',PL:'Plin'};
+  const {base,igv,total,discAmt}=tots(); const pn={EF:'Efectivo',TC:'Tarjeta',YP:'Yape',PL:'Plin'};
   document.getElementById('fsum').innerHTML=
     `<div class="ir"><span class="il">Tipo</span><span class="iv">${ST.dt}</span></div>`+
-    `<div class="ir"><span class="il">Serie</span><span class="iv">${ST.dt==='BOLETA'?CFG.sb:CFG.sf}</span></div>`+
+    `<div class="ir"><span class="il">Serie</span><span class="iv">${ST.dt==='BOLETA'?CFG.sb:ST.dt==='FACTURA'?CFG.sf:CFG.snv}</span></div>`+
     `<div class="ir"><span class="il">Cliente</span><span class="iv">${getCliente()}</span></div>`+
     `<div class="ir"><span class="il">Ítems</span><span class="iv">${ST.cart.reduce((s,i)=>s+i.qty,0)}</span></div>`+
     `<div class="ir"><span class="il">Pago</span><span class="iv">${pn[ST.pay]}</span></div>`+
     `<div class="div"></div>`+
     `<div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div>`+
-    `<div class="ir"><span class="il">IGV 18%</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
+    `<div class="ir"><span class="il">${CFG.igvOn?'IGV 18%':'IGV 0%'}</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
+    (ST.disc>0?`<div class="ir"><span class="il" style="color:var(--gold)">Descuento ${ST.disc}%</span><span class="iv" style="color:var(--gold)">-S/ ${discAmt.toFixed(2)}</span></div>`:'') +
+    (ST.courtesy&&ST.dt==='NOTA_VENTA'?`<div class="ir"><span class="il" style="color:var(--teal)">Cortesía</span><span class="iv" style="color:var(--teal)">Sin costo</span></div>`:'') +
     `<div class="div"></div>`+
     `<div class="ir"><span style="font-size:15px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:23px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`;
 }
 function openConf(){
-  const {base,igv,total}=tots();
+  const {base,igv,total,discAmt}=tots();
   document.getElementById('conf-s').innerHTML=
     `<div class="ir"><span class="il">Tipo</span><span class="iv">${ST.dt}</span></div>`+
     `<div class="ir"><span class="il">Cliente</span><span class="iv">${getCliente()}</span></div>`+
@@ -1362,6 +2239,8 @@ function openConf(){
     `<div class="div"></div>`+
     `<div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div>`+
     `<div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div>`+
+    (ST.disc>0?`<div class="ir"><span class="il" style="color:var(--gold)">Descuento ${ST.disc}%</span><span class="iv" style="color:var(--gold)">-S/ ${discAmt.toFixed(2)}</span></div>`:'') +
+    (ST.courtesy&&ST.dt==='NOTA_VENTA'?`<div class="ir"><span class="il" style="color:var(--teal)">Cortesía</span><span class="iv" style="color:var(--teal)">Sin costo</span></div>`:'') +
     `<div class="div"></div>`+
     `<div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:20px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`;
   openOv('ov-conf');
@@ -1369,16 +2248,58 @@ function openConf(){
 
 async function emitDoc(){
   const btn=document.getElementById('btn-emit');
+
+  // ── NOTA DE VENTA: guardar directo sin SUNAT ──
+  if(ST.dt==='NOTA_VENTA'){
+    btn.innerHTML='<span class="spin">⟳</span> Guardando...'; btn.disabled=true;
+    const {total,igv,base}=tots();
+    const ns=String(CFG.nnv).padStart(8,'0');
+    const cliente=getCliente();
+    const waCl=(document.getElementById('wa-cl')?.value||document.getElementById('wa-cl2')?.value||'').trim();
+    closeOv('ov-conf');
+    const row={
+      numero:`${CFG.snv}-${ns}`,
+      tipo:'NOTA_VENTA',
+      fecha:new Date().toISOString(),
+      cliente,
+      total:parseFloat(total.toFixed(2)),
+      igv:parseFloat(igv.toFixed(2)),
+      base_imponible:parseFloat(base.toFixed(2)),
+      items_count:ST.cart.reduce((s,i)=>s+i.qty,0),
+      items:ST.cart.map(i=>({id:i.id,name:i.name,qty:i.qty,price:i.price})),
+      estado:'EMITIDO',
+      pago:ST.pay,
+      wa_cliente:waCl,
+    };
+    const saved=await saveDoc(row);
+    ST.last=saved||row;
+    CFG.nnv++;
+    await db.from('empresas').update({num_nv:CFG.nnv}).eq('id',USER.id);
+    updSerie();
+    document.getElementById('ok-det').innerHTML=
+      `<div class="ir"><span class="il">Comprobante</span><span style="font-size:12px;color:var(--ok);font-weight:600">${row.numero}</span></div>`+
+      `<div class="ir"><span class="il">Tipo</span><span style="font-size:12px;color:var(--gold);font-weight:700">🏷️ NOTA DE VENTA</span></div>`+
+      `<div class="ir"><span class="il">Cliente</span><span style="font-size:12px">${cliente}</span></div>`+
+      `<div class="ir"><span class="il">Hora</span><span style="font-size:12px;color:var(--ok)">${new Date().toLocaleTimeString('es-PE')}</span></div>`+
+      `<div class="ir"><span class="il">Total</span><span style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`+
+      `<div style="font-size:10px;color:var(--g600);margin-top:8px;text-align:center">Documento interno · no válido ante SUNAT</div>`;
+    document.getElementById('wa-wrap-ok').style.display='none';
+    btn.innerHTML='Confirmar ✓'; btn.disabled=false;
+    openOv('ov-ok');
+    buildDash(); renderHist();
+    return;
+  }
+
   btn.innerHTML='<span class="spin">⟳</span> Enviando a SUNAT...'; btn.disabled=true;
-  
+
   const {total}=tots();
   const serie=ST.dt==='BOLETA'?CFG.sb:CFG.sf;
   const num=ST.dt==='BOLETA'?CFG.nb:CFG.nf;
   const ns=String(num).padStart(8,'0');
   const cliente=getCliente();
   const waCl=(document.getElementById('wa-cl')?.value||document.getElementById('wa-cl2')?.value||'').trim();
-  const base=total/1.18; const igv=total-base;
-  
+  const rate=CFG.igvOn?1.18:1; const base=total/rate; const igv=total-base;
+
   // Obtener datos del cliente
   const clienteDoc = ST.dt === 'FACTURA' ? gv('ruc-cl') : gv('dni');
   const clienteTipoDoc = ST.dt === 'FACTURA' ? '6' : '1'; // 6=RUC, 1=DNI
@@ -1402,8 +2323,12 @@ async function emitDoc(){
     formData.append('cliente_nombre', cliente);
     formData.append('cliente_tipo_doc', clienteTipoDoc);
     formData.append('cliente_num_doc', clienteDoc || '-');
-    formData.append('items_json', JSON.stringify(ST.cart));
+    // Aplicar descuento proporcional a precios antes de enviar a SUNAT
+    const discFactor=1-(ST.disc||0)/100;
+    const itemsParaSunat=ST.cart.map(i=>({...i,price:parseFloat((parseFloat(i.price)*discFactor).toFixed(4))}));
+    formData.append('items_json', JSON.stringify(itemsParaSunat));
     formData.append('total', total.toFixed(2));
+    if(CERT_PASS) formData.append('cert_password', CERT_PASS); // permite auto-restaurar cert si el backend reinició
     
     // Llamar al backend
     const response = await fetch(`${BACKEND_URL}/api/emitir`, {
@@ -1473,11 +2398,38 @@ async function emitDoc(){
       // ERROR - Comprobante rechazado
       const errorMsg = result.error_sunat || result.mensaje || 'Error desconocido';
       const errorCode = result.codigo || 'ERR';
-      
-      toast(`✗ SUNAT rechazó [${errorCode}]: ${errorMsg}`, 5000);
-      
-      // Mostrar detalles del error
-      alert(`❌ Comprobante RECHAZADO por SUNAT\n\nCódigo: ${errorCode}\nMotivo: ${errorMsg}\n\nVerifica:\n- Certificado digital vigente\n- Credenciales SOL correctas\n- Datos del comprobante\n- Estado del contribuyente en SUNAT`);
+
+      btn.innerHTML='Confirmar ✓'; btn.disabled=false;
+
+      // Texto de ayuda según el código de error
+      let helpText = '';
+      if(errorCode === 'FIRMA_ERR'){
+        helpText = '\n\n💡 PROBLEMA AL FIRMAR EL XML:\nHubo un error al firmar con tu certificado digital.\n\nPOSIBLES CAUSAS:\n- Contraseña del certificado incorrecta\n- Certificado vencido o dañado\n\nSOLUCIÓN:\n1. Ve a Configuración, elimina el certificado y vuelve a subirlo\n2. Asegúrate de ingresar la contraseña correcta';
+      } else if(errorCode === 'NO_CERT'){
+        helpText = '\n\n💡 SOLUCIÓN:\n1. Ve a Configuración (⚙️)\n2. Carga tu certificado digital (.p12 o .pfx)\n3. Ingresa la contraseña del certificado\n4. Vuelve a intentar emitir';
+      } else if(errorCode === 'NO_CERT_PASS'){
+        helpText = '\n\n💡 SOLUCIÓN:\nVuelve a cargar el certificado en Configuración e ingresa la contraseña correcta.';
+      } else if(errorCode === '1773_BETA' || errorCode === '1773' || errorMsg.includes('ZIP') || errorMsg.includes('nombre del archivo') || errorMsg.includes('entorno BETA')){
+        const serieActual = ST.dt==='BOLETA' ? CFG.sb : CFG.sf;
+        const serieEsperada = ST.dt==='BOLETA' ? 'B001' : 'F001';
+        helpText = `\n\n💡 CAUSA: Serie inválida para el entorno BETA\n`+
+          `Serie configurada: "${serieActual}"\n\n`+
+          `En BETA, SUNAT exige series estándar:\n`+
+          `  • Boletas  → B001, B002...\n`+
+          `  • Facturas → F001, F002...\n\n`+
+          `SOLUCIÓN (solo para pruebas beta):\nVe a Configuración (⚙️) y cambia\n`+
+          `Serie ${ST.dt==='BOLETA'?'Boleta':'Factura'} a "${serieEsperada}".\n\n`+
+          `En PRODUCCIÓN podrás usar tu serie real (ej: E001).`;
+      } else if(errorMsg.toLowerCase().includes('no signature') || errorMsg.toLowerCase().includes('signature')){
+        helpText = '\n\n💡 El XML llegó a SUNAT sin firma digital.\nPOSIBLES CAUSAS:\n- Librerías de firma no instaladas en el servidor\n- Certificado con contraseña incorrecta\n- Error interno al firmar\n\nSOLUCIÓN:\n1. Recarga el certificado en Configuración\n2. Si el error persiste, revisa el servidor:\n   pip install signxml lxml cryptography';
+      } else if(errorMsg.toLowerCase().includes('firma') || errorMsg.toLowerCase().includes('alterado')){
+        helpText = '\n\n💡 POSIBLES CAUSAS:\n- Certificado vencido\n- Contraseña incorrecta\n- Archivo corrupto\n\nSOLUCIÓN: Recarga el certificado en Configuración';
+      } else if(/^[23]\d{3}$/.test(errorCode)){
+        helpText = '\n\n💡 Código SUNAT ' + errorCode + ':\nRevisa la guía de códigos de error en:\nhttps://cpe.sunat.gob.pe/manuales';
+      }
+
+      toast(`✗ Error [${errorCode}]: ${errorMsg}`, 5000);
+      alert(`❌ Comprobante no emitido\n\nCódigo: ${errorCode}\nMotivo: ${errorMsg}${helpText}`);
     }
     
   } catch(error){
@@ -1491,8 +2443,8 @@ async function emitDoc(){
 
 function resetBill(){
   closeOv('ov-ok'); 
-  ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null;
-  ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2'].forEach(id=>sv(id,''));
+  ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null; ST.disc=0; ST.courtesy=false;
+  ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2','nv-cl'].forEach(id=>sv(id,''));
   const dr=document.getElementById('dr');
   if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; }
   bStep(0); setDT('BOLETA'); renderCart();
@@ -1509,8 +2461,8 @@ function generarPDF(doc){
   const pdf = new jsPDF({ unit:'mm', format:'a4' });
   
   const total = parseFloat(doc.total||0);
-  const base = total/1.18;
-  const igv = total - base;
+  const igv = parseFloat(doc.igv ?? (total - total/1.18));
+  const base = parseFloat(doc.base_imponible ?? (total/1.18));
   const items = doc.items || [];
   
   // ── Header empresa ──
@@ -1596,7 +2548,7 @@ function generarPDF(doc){
   pdf.setFontSize(9);
   pdf.setTextColor(100, 100, 100);
   pdf.text('Op. Gravada:', 130, y); pdf.text(`S/ ${base.toFixed(2)}`, 170, y); y += 5;
-  pdf.text('IGV (18%):', 130, y); pdf.text(`S/ ${igv.toFixed(2)}`, 170, y); y += 5;
+  if(igv > 0){ pdf.text('IGV (18%):', 130, y); pdf.text(`S/ ${igv.toFixed(2)}`, 170, y); y += 5; }
   
   pdf.setDrawColor(0, 201, 167);
   pdf.setLineWidth(0.5);
@@ -1664,16 +2616,26 @@ function openPDF(){
   const doc = ST.last;
   if(!doc){ toast('⚠️ No hay comprobante reciente'); return; }
   toast('📄 Generando PDF...');
-  
+
   setTimeout(() => {
     try {
       const pdf = generarPDF(doc);
       if(pdf){
-        // Esperar al QR
         setTimeout(() => {
           const filename = `${(doc.tipo||'BOL').substring(0,3)}_${(doc.numero||'000').replace(/[-\/]/g,'_')}.pdf`;
+          const blob = pdf.output('blob');
+
+          // Guardar en Drive si está activado
+          if(GDRIVE_ENABLED && GDRIVE_TOKEN){
+            uploadPDFToDrive(blob, filename, doc).then(() => {
+              toast('✓ PDF descargado y guardado en Drive');
+            });
+          }
+
           pdf.save(filename);
-          toast('✓ PDF descargado');
+          if(!GDRIVE_ENABLED || !GDRIVE_TOKEN){
+            toast('✓ PDF descargado');
+          }
         }, 300);
       }
     } catch(e){
@@ -1759,17 +2721,19 @@ function renderHist(){
   document.getElementById('hist-s').textContent=list.length+' comprobantes · último mes';
   document.getElementById('hlist').innerHTML=list.length===0
     ?'<div class="empty"><div class="ei">📭</div><div class="et">Sin comprobantes aún</div><div class="es">Emite el primero</div></div>'
-    :list.map(d=>`<div class="hi" onclick="openDet('${d.id}')"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span style="font-family:monospace;font-size:11px;color:var(--g400)">${d.tipo==='BOLETA'?'🧾':'📄'} ${d.numero}</span>${badge(d.estado||'ACEPTADO')}</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:9px">${d.cliente||'—'}</span><span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:var(--teal);flex-shrink:0">S/${parseFloat(d.total||0).toFixed(2)}</span></div><div style="margin-top:4px;font-size:10px;color:var(--g600)">${(d.fecha||'').slice(0,10)} · ${d.items_count||0} ítem(s) · ${d.pago||'—'}</div></div>`).join('');
+    :list.map(d=>{ const ico=d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':d.tipo==='NOTA_VENTA'?'🏷️':'📝'; return `<div class="hi" onclick="openDet('${d.id}')"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span style="font-family:monospace;font-size:11px;color:var(--g400)">${ico} ${d.numero}</span>${badge(d.estado||'ACEPTADO')}</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:9px">${d.cliente||'—'}</span><span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:var(--teal);flex-shrink:0">S/${parseFloat(d.total||0).toFixed(2)}</span></div><div style="margin-top:4px;font-size:10px;color:var(--g600)">${(d.fecha||'').slice(0,10)} · ${d.items_count||0} ítem(s) · ${d.pago||'—'}</div></div>`; }).join('');
 }
 function openDet(id){
   const d=DOCS.find(x=>x.id==id); if(!d) return;
-  const tot=parseFloat(d.total||0); const igv=tot-tot/1.18; const base=tot/1.18;
+  const tot=parseFloat(d.total||0); const igv=parseFloat(d.igv??tot-tot/1.18); const base=parseFloat(d.base_imponible??tot/1.18);
   const esNC = d.tipo === 'NOTA_CREDITO';
+  const esNV = d.tipo === 'NOTA_VENTA';
   document.getElementById('det-in').innerHTML=
-    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':'📝'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
+    `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':d.tipo==='NOTA_VENTA'?'🏷️':'📝'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
     `<div class="card"><div class="ir"><span class="il">Cliente</span><span class="iv">${d.cliente||'—'}</span></div><div class="ir"><span class="il">Ítems</span><span class="iv">${d.items_count||0}</span></div><div class="ir"><span class="il">Pago</span><span class="iv">${d.pago||'—'}</span></div>${d.ref_numero?`<div class="ir"><span class="il">Ref. Original</span><span class="iv">${d.ref_numero}</span></div>`:''}<div class="div"></div><div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div><div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div><div class="div"></div><div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:var(--teal)">S/ ${tot.toFixed(2)}</span></div></div>`+
     (d.cdr_hash?`<div class="ok-bx" style="font-size:12px"><span style="color:var(--g600)">CDR Hash:</span> <span style="color:var(--ok);font-weight:600">${d.cdr_hash}</span></div>`:'')+
-    `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn bs fw btn-sm" onclick="downloadHistPDF('${d.id}')">📄 PDF</button><button class="btn bs fw btn-sm" onclick="closeOv('ov-det')">📥 XML</button>${!esNC && d.estado==='ACEPTADO'?`<button class="btn bd fw btn-sm" onclick="closeOv('ov-det');iniciarNC('${d.id}')">📝 Nota Crédito</button>`:''}</div>`;
+    (esNV?`<div style="font-size:10px;color:var(--gold);background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:7px 10px;margin-bottom:8px">🏷️ Nota de Venta — documento interno, no válido ante SUNAT</div>`:'')+
+    `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn bs fw btn-sm" onclick="downloadHistPDF('${d.id}')">📄 PDF</button>${!esNC&&!esNV?`<button class="btn bs fw btn-sm" onclick="closeOv('ov-det')">📥 XML</button>`:''} ${!esNC&&!esNV&&d.estado==='ACEPTADO'?`<button class="btn bd fw btn-sm" onclick="closeOv('ov-det');iniciarNC('${d.id}')">📝 Nota Crédito</button>`:''}</div>`;
   openOv('ov-det');
 }
 
@@ -1793,8 +2757,27 @@ function expCSV(){
 function openOv(id){ document.getElementById(id)?.classList.add('show'); }
 function closeOv(id){ document.getElementById(id)?.classList.remove('show'); }
 document.querySelectorAll('.ov').forEach(o=>o.addEventListener('click',e=>{ if(e.target===o) o.classList.remove('show'); }));
+// Reiniciar modal de correlación al cerrar haciendo click en el fondo
+const ovCorr = document.getElementById('ov-correlacion');
+if(ovCorr){
+  ovCorr.addEventListener('click', (e) => {
+    if(e.target === ovCorr){
+      document.getElementById('corr-paso1').style.display = 'block';
+      document.getElementById('corr-paso2-nuevo').style.display = 'none';
+      document.getElementById('corr-paso2-existe').style.display = 'none';
+      sv('corr-num-b', ''); sv('corr-num-f', '');
+      sv('corr-serie-b', CFG.sb||'B001'); sv('corr-serie-f', CFG.sf||'F001');
+      ovCorr.classList.remove('show');
+    }
+  });
+}
 let _tt;
 function toast(msg, duration=2800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), duration); }
+function showSuccess(title, sub){
+  document.getElementById('success-title').textContent = title;
+  document.getElementById('success-sub').textContent = sub || '';
+  openOv('ov-success');
+}
 function copySql(){ navigator.clipboard.writeText(SETUP_SQL).then(()=>toast('✓ SQL copiado')).catch(()=>toast('Copia el SQL manualmente')); }
 
 // ═══════════════════════════════════════════
@@ -1868,14 +2851,15 @@ async function emitNC(){
         fecha: new Date().toISOString(),
         cliente: NC_REF.cliente,
         total: parseFloat(total.toFixed(2)),
-        igv: parseFloat((total - total/1.18).toFixed(2)),
-        base_imponible: parseFloat((total/1.18).toFixed(2)),
+        igv: parseFloat((NC_REF.igv??total-total/1.18).toFixed(2)),
+        base_imponible: parseFloat((NC_REF.base_imponible??total/1.18).toFixed(2)),
         items_count: (NC_REF.items||[]).reduce((s,i) => s + (i.qty||1), 0),
         items: NC_REF.items || [],
         estado: 'ACEPTADO',
         pago: NC_REF.pago || 'EF',
         cdr_hash: result.cdr_hash,
         ref_numero: NC_REF.numero,
+        ruc_cliente: NC_REF.ruc_cliente || '',
       };
       
       await saveDoc(row);
