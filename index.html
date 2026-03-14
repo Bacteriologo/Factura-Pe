@@ -424,6 +424,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
           <div class="trow">
             <button class="topt on" id="ob" onclick="setDT('BOLETA')"><span class="ti">🧾</span>BOLETA</button>
             <button class="topt" id="of" onclick="setDT('FACTURA')"><span class="ti">📄</span>FACTURA</button>
+            <button class="topt" id="onv" onclick="setDT('NOTA_VENTA')"><span class="ti">🏷️</span>NOTA VENTA</button>
           </div>
           <div id="bf">
             <label class="flbl">DNI del cliente (opcional)</label>
@@ -441,6 +442,13 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
               <div class="fg"><label class="flbl">Razón Social</label><input class="fi" id="razon" placeholder="Autocompleta"></div>
               <div class="fg"><label class="flbl">Dirección</label><input class="fi" id="dir-cl" placeholder="Av. Lima 123"></div>
             </div>
+          </div>
+          <div id="nvf" style="display:none">
+            <div style="font-size:11px;color:var(--gold);background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:8px 11px;margin-bottom:9px">
+              🏷️ <strong>Nota de Venta</strong> — Documento interno. No tiene validez ante SUNAT.
+            </div>
+            <label class="flbl">Nombre del cliente (opcional)</label>
+            <input class="fi" id="nv-cl" placeholder="Cliente Final">
           </div>
         </div>
         <button class="btn bp fw btn-lg" onclick="bStep(1)">Continuar →</button>
@@ -547,6 +555,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         <button class="fp" onclick="setHF(this,'BOLETA')">🧾 Boletas</button>
         <button class="fp" onclick="setHF(this,'FACTURA')">📄 Facturas</button>
         <button class="fp" onclick="setHF(this,'NOTA_CREDITO')">📝 N. Crédito</button>
+        <button class="fp" onclick="setHF(this,'NOTA_VENTA')">🏷️ N. Venta</button>
         <button class="fp" onclick="setHF(this,'ACEPTADO')">✓ Aceptados</button>
         <button class="fp" onclick="setHF(this,'RECHAZADO')">✕ Rechazados</button>
       </div>
@@ -630,11 +639,17 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
           <span style="color:var(--g600)">—</span>
           <input class="fi" id="c-nf" placeholder="000001" style="flex:1" inputmode="numeric">
         </div>
-        <div style="display:flex;gap:7px;align-items:center">
+        <div style="display:flex;gap:7px;align-items:center;margin-bottom:9px">
           <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Nota Crédito</span>
           <input class="fi" id="c-snc" placeholder="NC01" style="width:72px;flex-shrink:0">
           <span style="color:var(--g600)">—</span>
           <input class="fi" id="c-nnc" placeholder="000001" style="flex:1" inputmode="numeric">
+        </div>
+        <div style="display:flex;gap:7px;align-items:center">
+          <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Nota Venta</span>
+          <input class="fi" id="c-snv" placeholder="NV01" style="width:72px;flex-shrink:0">
+          <span style="color:var(--g600)">—</span>
+          <input class="fi" id="c-nnv" placeholder="000001" style="flex:1" inputmode="numeric">
         </div>
       </div>
 
@@ -1056,6 +1071,8 @@ CREATE TABLE IF NOT EXISTS empresas (
   num_factura INT DEFAULT 1,
   serie_nc TEXT DEFAULT 'NC01',
   num_nc INT DEFAULT 1,
+  serie_nv TEXT DEFAULT 'NV01',
+  num_nv INT DEFAULT 1,
   wa_activo BOOLEAN DEFAULT false,
   wa_numero TEXT DEFAULT '',
   wa_mensaje TEXT DEFAULT 'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
@@ -1063,8 +1080,10 @@ CREATE TABLE IF NOT EXISTS empresas (
   created_at TIMESTAMPTZ DEFAULT now()
 );
 -- ── MIGRACIÓN para bases de datos existentes ──────────────────────────
--- Si tu tabla ya existía antes, ejecuta SOLO esta línea en Supabase SQL Editor:
+-- Si tu tabla ya existía antes, ejecuta estas líneas en Supabase SQL Editor:
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS igv_activo BOOLEAN DEFAULT true;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS serie_nv TEXT DEFAULT 'NV01';
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS num_nv INT DEFAULT 1;
 
 -- 2. Tabla de comprobantes
 CREATE TABLE IF NOT EXISTS comprobantes (
@@ -1124,7 +1143,7 @@ CREATE POLICY "prod_own" ON productos
 //  ESTADO GLOBAL
 // ═══════════════════════════════════════════
 let USER = null; // sesión Supabase
-let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.',igvOn:true };
+let CFG = { ruc:'',nom:'',dir:'',ubi:'',su:'',sp:'',env:'beta',sb:'B001',nb:1,sf:'F001',nf:1,snc:'NC01',nnc:1,snv:'NV01',nnv:1,waOn:false,waNum:'',waMsg:'Hola {nombre}, tu {tipo} N° {numero} por {total}.',igvOn:true };
 let PRODS = [];
 let DOCS  = [];
 let ST = { screen:'dash', dt:'BOLETA', cart:[], pay:'EF', step:0, cf:'TODOS', cq:'', hf:'TODOS', hq:'', last:null };
@@ -1258,6 +1277,7 @@ async function loadEmpresa(){
       sb:data.serie_boleta||'B001', nb:data.num_boleta||1,
       sf:data.serie_factura||'F001', nf:data.num_factura||1,
       snc:data.serie_nc||'NC01', nnc:data.num_nc||1,
+      snv:data.serie_nv||'NV01', nnv:data.num_nv||1,
       waOn:data.wa_activo||false, waNum:data.wa_numero||'', waMsg:data.wa_mensaje||'Hola {nombre}, tu {tipo} N° {numero} por {total}.',
       igvOn: data.igv_activo !== false,
     };
@@ -1422,22 +1442,30 @@ async function saveCfg(){
   CFG.sb=gv('c-sb')||'B001'; CFG.nb=parseInt(gv('c-nb'))||1;
   CFG.sf=gv('c-sf')||'F001'; CFG.nf=parseInt(gv('c-nf'))||1;
   CFG.snc=gv('c-snc')||'NC01'; CFG.nnc=parseInt(gv('c-nnc'))||1;
+  CFG.snv=gv('c-snv')||'NV01'; CFG.nnv=parseInt(gv('c-nnv'))||1;
   CFG.waNum=gv('c-wa'); CFG.waMsg=gv('c-wam');
   const payload = {
     id:USER.id, ruc:CFG.ruc, nombre:CFG.nom, direccion:CFG.dir, ubigeo:CFG.ubi,
     usuario_sol:CFG.su, clave_sol:CFG.sp, entorno:CFG.env,
     serie_boleta:CFG.sb, num_boleta:CFG.nb, serie_factura:CFG.sf, num_factura:CFG.nf,
     serie_nc:CFG.snc, num_nc:CFG.nnc,
+    serie_nv:CFG.snv, num_nv:CFG.nnv,
     wa_activo:CFG.waOn, wa_numero:CFG.waNum, wa_mensaje:CFG.waMsg,
     igv_activo:CFG.igvOn,
   };
   let { error } = await db.from('empresas').upsert(payload);
   if(error && error.message && error.message.includes('igv_activo')){
-    // Columna aún no existe en esta BD → guardar sin ella y avisar
     const { igv_activo, ...payloadSinIgv } = payload;
     const res2 = await db.from('empresas').upsert(payloadSinIgv);
     error = res2.error;
     if(!error) toast('⚠️ Guardado (sin IGV — ejecuta la migración SQL en Supabase)');
+  }
+  if(error && error.message && (error.message.includes('serie_nv')||error.message.includes('num_nv'))){
+    // Columnas NV aún no existen en esta BD → guardar sin ellas (migración pendiente)
+    const { serie_nv, num_nv, ...payloadSinNv } = payload;
+    const res3 = await db.from('empresas').upsert(payloadSinNv);
+    error = res3.error;
+    if(!error) toast('⚠️ Guardado (ejecuta la migración SQL para Nota de Venta en Supabase)');
   }
   if(error){ toast('✗ Error al guardar: '+error.message); return; }
   applyCfg(); updSerie();
@@ -1610,6 +1638,7 @@ function applyCfg(){
   sv('c-sb',CFG.sb);   sv('c-nb',pad(CFG.nb));
   sv('c-sf',CFG.sf);   sv('c-nf',pad(CFG.nf));
   sv('c-snc',CFG.snc); sv('c-nnc',pad(CFG.nnc));
+  sv('c-snv',CFG.snv); sv('c-nnv',pad(CFG.nnv));
   sv('c-wa',CFG.waNum); sv('c-wam',CFG.waMsg);
   const ce=document.getElementById('c-env'); if(ce) ce.value=CFG.env;
   setTgEl('tg-wa',CFG.waOn);
@@ -1723,7 +1752,7 @@ const gv  = id=>document.getElementById(id)?.value||'';
 const sv  = (id,v)=>{ const el=document.getElementById(id); if(el) el.value=v||''; };
 const pad = n=>String(n||1).padStart(6,'0');
 function setTgEl(id,val){ const b=document.getElementById(id); if(b) b.className='tg '+(val?'on':'off'); }
-function updSerie(){ const s=ST.dt==='BOLETA'?CFG.sb:CFG.sf; const n=ST.dt==='BOLETA'?CFG.nb:CFG.nf; const el=document.getElementById('bill-sl'); if(el) el.textContent=`Serie ${s} · N° ${String(n).padStart(8,'0')}`; }
+function updSerie(){ const s=ST.dt==='BOLETA'?CFG.sb:ST.dt==='FACTURA'?CFG.sf:CFG.snv; const n=ST.dt==='BOLETA'?CFG.nb:ST.dt==='FACTURA'?CFG.nf:CFG.nnv; const el=document.getElementById('bill-sl'); if(el) el.textContent=`Serie ${s} · N° ${String(n).padStart(8,'0')}`; }
 function updWAHint(){ ['wa-hl','wa-hl2'].forEach(id=>{ const el=document.getElementById(id); if(!el) return; if(CFG.waOn&&CFG.waNum){el.textContent=`✓ WhatsApp activo · 51${CFG.waNum}`;el.style.color='var(--teal)';}else{el.textContent='Desactivado · activa en Config';el.style.color='var(--g600)';} }); }
 function flipWA(){ CFG.waOn=!CFG.waOn; setTgEl('tg-wa',CFG.waOn); updWAHint(); }
 function flipIGV(){ CFG.igvOn=!CFG.igvOn; setTgEl('tg-igv',CFG.igvOn); renderCart(); }
@@ -1737,7 +1766,7 @@ function addFreeItem(){
   ST.cart.push({id:'free-'+Date.now(),name:desc,price,qty,unit:'ZZ',_custom:true});
   renderCart(); closeOv('ov-free'); toast('✓ Línea agregada');
 }
-function badge(s){ const m={ACEPTADO:['ok-b','✓'],RECHAZADO:['er-b','✕'],PENDIENTE:['pn-b','◐']}; const [c,i]=m[s]||['gy-b','·']; return `<span class="badge ${c}">${i} ${s}</span>`; }
+function badge(s){ const m={ACEPTADO:['ok-b','✓'],RECHAZADO:['er-b','✕'],PENDIENTE:['pn-b','◐'],EMITIDO:['gy-b','🏷']}; const [c,i]=m[s]||['gy-b','·']; return `<span class="badge ${c}">${i} ${s}</span>`; }
 
 // ═══════════════════════════════════════════
 //  DASHBOARD
@@ -1787,13 +1816,24 @@ function buildDash(){
 
   const rl=document.getElementById('rec-list');
   if(!DOCS.length){ rl.innerHTML='<div class="empty" style="padding:14px 0"><div class="ei">📋</div><div class="et">Sin comprobantes aún</div></div>'; return; }
-  rl.innerHTML=DOCS.slice(0,4).map(d=>`<div class="ri"><div class="ri-ico" style="background:${d.tipo==='BOLETA'?'rgba(0,201,167,.1)':'rgba(74,158,255,.1)'}">${d.tipo==='BOLETA'?'🧾':'📄'}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.numero}</div><div style="font-size:10px;color:var(--g600)">${d.cliente||'—'}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:var(--teal)">S/${parseFloat(d.total||0).toFixed(2)}</div>${badge(d.estado||'ACEPTADO')}</div></div>`).join('');
+  const icoDoc=t=>t==='BOLETA'?'🧾':t==='FACTURA'?'📄':t==='NOTA_VENTA'?'🏷️':'📝';
+  const bgDoc=t=>t==='BOLETA'?'rgba(0,201,167,.1)':t==='NOTA_VENTA'?'rgba(251,191,36,.1)':'rgba(74,158,255,.1)';
+  rl.innerHTML=DOCS.slice(0,4).map(d=>`<div class="ri"><div class="ri-ico" style="background:${bgDoc(d.tipo)}">${icoDoc(d.tipo)}</div><div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${d.numero}</div><div style="font-size:10px;color:var(--g600)">${d.cliente||'—'}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-family:Syne,sans-serif;font-size:12px;font-weight:700;color:var(--teal)">S/${parseFloat(d.total||0).toFixed(2)}</div>${badge(d.estado||'ACEPTADO')}</div></div>`).join('');
 }
 
 // ═══════════════════════════════════════════
 //  BILLING
 // ═══════════════════════════════════════════
-function setDT(t){ ST.dt=t; document.getElementById('ob').classList.toggle('on',t==='BOLETA'); document.getElementById('of').classList.toggle('on',t==='FACTURA'); document.getElementById('bf').style.display=t==='BOLETA'?'':'none'; document.getElementById('ff').style.display=t==='FACTURA'?'':'none'; updSerie(); }
+function setDT(t){
+  ST.dt=t;
+  document.getElementById('ob').classList.toggle('on',t==='BOLETA');
+  document.getElementById('of').classList.toggle('on',t==='FACTURA');
+  document.getElementById('onv').classList.toggle('on',t==='NOTA_VENTA');
+  document.getElementById('bf').style.display=t==='BOLETA'?'':'none';
+  document.getElementById('ff').style.display=t==='FACTURA'?'':'none';
+  document.getElementById('nvf').style.display=t==='NOTA_VENTA'?'':'none';
+  updSerie();
+}
 
 function bStep(n){
   ST.step=n;
@@ -1806,7 +1846,7 @@ function bStep(n){
   document.getElementById('s-bill').scrollTop=0;
 }
 
-function getCliente(){ const raz=document.getElementById('razon')?.value; const dni=document.getElementById('dni')?.value; const dr=document.getElementById('dr'); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; return 'Cliente Final'; }
+function getCliente(){ if(ST.dt==='NOTA_VENTA'){ const nv=(document.getElementById('nv-cl')?.value||'').trim(); return nv||'Cliente Final'; } const raz=document.getElementById('razon')?.value; const dni=document.getElementById('dni')?.value; const dr=document.getElementById('dr'); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; return 'Cliente Final'; }
 
 async function lookDni(){
   const v=document.getElementById('dni').value.trim(), r=document.getElementById('dr');
@@ -1879,7 +1919,7 @@ function buildFSum(){
   const {base,igv,total}=tots(); const pn={EF:'Efectivo',TC:'Tarjeta',YP:'Yape',PL:'Plin'};
   document.getElementById('fsum').innerHTML=
     `<div class="ir"><span class="il">Tipo</span><span class="iv">${ST.dt}</span></div>`+
-    `<div class="ir"><span class="il">Serie</span><span class="iv">${ST.dt==='BOLETA'?CFG.sb:CFG.sf}</span></div>`+
+    `<div class="ir"><span class="il">Serie</span><span class="iv">${ST.dt==='BOLETA'?CFG.sb:ST.dt==='FACTURA'?CFG.sf:CFG.snv}</span></div>`+
     `<div class="ir"><span class="il">Cliente</span><span class="iv">${getCliente()}</span></div>`+
     `<div class="ir"><span class="il">Ítems</span><span class="iv">${ST.cart.reduce((s,i)=>s+i.qty,0)}</span></div>`+
     `<div class="ir"><span class="il">Pago</span><span class="iv">${pn[ST.pay]}</span></div>`+
@@ -1905,8 +1945,50 @@ function openConf(){
 
 async function emitDoc(){
   const btn=document.getElementById('btn-emit');
+
+  // ── NOTA DE VENTA: guardar directo sin SUNAT ──
+  if(ST.dt==='NOTA_VENTA'){
+    btn.innerHTML='<span class="spin">⟳</span> Guardando...'; btn.disabled=true;
+    const {total,igv,base}=tots();
+    const ns=String(CFG.nnv).padStart(8,'0');
+    const cliente=getCliente();
+    const waCl=(document.getElementById('wa-cl')?.value||document.getElementById('wa-cl2')?.value||'').trim();
+    closeOv('ov-conf');
+    const row={
+      numero:`${CFG.snv}-${ns}`,
+      tipo:'NOTA_VENTA',
+      fecha:new Date().toISOString(),
+      cliente,
+      total:parseFloat(total.toFixed(2)),
+      igv:parseFloat(igv.toFixed(2)),
+      base_imponible:parseFloat(base.toFixed(2)),
+      items_count:ST.cart.reduce((s,i)=>s+i.qty,0),
+      items:ST.cart.map(i=>({id:i.id,name:i.name,qty:i.qty,price:i.price})),
+      estado:'EMITIDO',
+      pago:ST.pay,
+      wa_cliente:waCl,
+    };
+    const saved=await saveDoc(row);
+    ST.last=saved||row;
+    CFG.nnv++;
+    await db.from('empresas').update({num_nv:CFG.nnv}).eq('id',USER.id);
+    updSerie();
+    document.getElementById('ok-det').innerHTML=
+      `<div class="ir"><span class="il">Comprobante</span><span style="font-size:12px;color:var(--ok);font-weight:600">${row.numero}</span></div>`+
+      `<div class="ir"><span class="il">Tipo</span><span style="font-size:12px;color:var(--gold);font-weight:700">🏷️ NOTA DE VENTA</span></div>`+
+      `<div class="ir"><span class="il">Cliente</span><span style="font-size:12px">${cliente}</span></div>`+
+      `<div class="ir"><span class="il">Hora</span><span style="font-size:12px;color:var(--ok)">${new Date().toLocaleTimeString('es-PE')}</span></div>`+
+      `<div class="ir"><span class="il">Total</span><span style="font-family:Syne,sans-serif;font-size:16px;font-weight:800;color:var(--teal)">S/ ${total.toFixed(2)}</span></div>`+
+      `<div style="font-size:10px;color:var(--g600);margin-top:8px;text-align:center">Documento interno · no válido ante SUNAT</div>`;
+    document.getElementById('wa-wrap-ok').style.display='none';
+    btn.innerHTML='Confirmar ✓'; btn.disabled=false;
+    openOv('ov-ok');
+    buildDash(); renderHist();
+    return;
+  }
+
   btn.innerHTML='<span class="spin">⟳</span> Enviando a SUNAT...'; btn.disabled=true;
-  
+
   const {total}=tots();
   const serie=ST.dt==='BOLETA'?CFG.sb:CFG.sf;
   const num=ST.dt==='BOLETA'?CFG.nb:CFG.nf;
@@ -2040,7 +2122,7 @@ async function emitDoc(){
 function resetBill(){
   closeOv('ov-ok'); 
   ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null;
-  ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2'].forEach(id=>sv(id,''));
+  ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2','nv-cl'].forEach(id=>sv(id,''));
   const dr=document.getElementById('dr');
   if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; }
   bStep(0); setDT('BOLETA'); renderCart();
@@ -2317,17 +2399,19 @@ function renderHist(){
   document.getElementById('hist-s').textContent=list.length+' comprobantes · último mes';
   document.getElementById('hlist').innerHTML=list.length===0
     ?'<div class="empty"><div class="ei">📭</div><div class="et">Sin comprobantes aún</div><div class="es">Emite el primero</div></div>'
-    :list.map(d=>`<div class="hi" onclick="openDet('${d.id}')"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span style="font-family:monospace;font-size:11px;color:var(--g400)">${d.tipo==='BOLETA'?'🧾':'📄'} ${d.numero}</span>${badge(d.estado||'ACEPTADO')}</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:9px">${d.cliente||'—'}</span><span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:var(--teal);flex-shrink:0">S/${parseFloat(d.total||0).toFixed(2)}</span></div><div style="margin-top:4px;font-size:10px;color:var(--g600)">${(d.fecha||'').slice(0,10)} · ${d.items_count||0} ítem(s) · ${d.pago||'—'}</div></div>`).join('');
+    :list.map(d=>{ const ico=d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':d.tipo==='NOTA_VENTA'?'🏷️':'📝'; return `<div class="hi" onclick="openDet('${d.id}')"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:7px"><span style="font-family:monospace;font-size:11px;color:var(--g400)">${ico} ${d.numero}</span>${badge(d.estado||'ACEPTADO')}</div><div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:13px;font-weight:500;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-right:9px">${d.cliente||'—'}</span><span style="font-family:Syne,sans-serif;font-size:15px;font-weight:800;color:var(--teal);flex-shrink:0">S/${parseFloat(d.total||0).toFixed(2)}</span></div><div style="margin-top:4px;font-size:10px;color:var(--g600)">${(d.fecha||'').slice(0,10)} · ${d.items_count||0} ítem(s) · ${d.pago||'—'}</div></div>`; }).join('');
 }
 function openDet(id){
   const d=DOCS.find(x=>x.id==id); if(!d) return;
   const tot=parseFloat(d.total||0); const igv=tot-tot/1.18; const base=tot/1.18;
   const esNC = d.tipo === 'NOTA_CREDITO';
+  const esNV = d.tipo === 'NOTA_VENTA';
   document.getElementById('det-in').innerHTML=
     `<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:14px"><div><div style="font-family:Syne,sans-serif;font-size:18px;font-weight:800">${d.tipo==='BOLETA'?'🧾':d.tipo==='FACTURA'?'📄':'📝'} ${d.numero}</div><div style="font-size:12px;color:var(--g600);margin-top:2px">${d.tipo} · ${(d.fecha||'').slice(0,10)}</div></div>${badge(d.estado||'ACEPTADO')}</div>`+
     `<div class="card"><div class="ir"><span class="il">Cliente</span><span class="iv">${d.cliente||'—'}</span></div><div class="ir"><span class="il">Ítems</span><span class="iv">${d.items_count||0}</span></div><div class="ir"><span class="il">Pago</span><span class="iv">${d.pago||'—'}</span></div>${d.ref_numero?`<div class="ir"><span class="il">Ref. Original</span><span class="iv">${d.ref_numero}</span></div>`:''}<div class="div"></div><div class="ir"><span class="il">Base</span><span class="iv">S/ ${base.toFixed(2)}</span></div><div class="ir"><span class="il">IGV</span><span class="iv">S/ ${igv.toFixed(2)}</span></div><div class="div"></div><div class="ir"><span style="font-size:14px;font-weight:600">TOTAL</span><span style="font-family:Syne,sans-serif;font-size:19px;font-weight:800;color:var(--teal)">S/ ${tot.toFixed(2)}</span></div></div>`+
     (d.cdr_hash?`<div class="ok-bx" style="font-size:12px"><span style="color:var(--g600)">CDR Hash:</span> <span style="color:var(--ok);font-weight:600">${d.cdr_hash}</span></div>`:'')+
-    `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn bs fw btn-sm" onclick="downloadHistPDF('${d.id}')">📄 PDF</button><button class="btn bs fw btn-sm" onclick="closeOv('ov-det')">📥 XML</button>${!esNC && d.estado==='ACEPTADO'?`<button class="btn bd fw btn-sm" onclick="closeOv('ov-det');iniciarNC('${d.id}')">📝 Nota Crédito</button>`:''}</div>`;
+    (esNV?`<div style="font-size:10px;color:var(--gold);background:rgba(251,191,36,.07);border:1px solid rgba(251,191,36,.2);border-radius:8px;padding:7px 10px;margin-bottom:8px">🏷️ Nota de Venta — documento interno, no válido ante SUNAT</div>`:'')+
+    `<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn bs fw btn-sm" onclick="downloadHistPDF('${d.id}')">📄 PDF</button>${!esNC&&!esNV?`<button class="btn bs fw btn-sm" onclick="closeOv('ov-det')">📥 XML</button>`:''} ${!esNC&&!esNV&&d.estado==='ACEPTADO'?`<button class="btn bd fw btn-sm" onclick="closeOv('ov-det');iniciarNC('${d.id}')">📝 Nota Crédito</button>`:''}</div>`;
   openOv('ov-det');
 }
 
