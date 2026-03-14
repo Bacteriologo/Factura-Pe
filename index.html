@@ -1700,8 +1700,11 @@ async function eliminarCertificado(){
     });
     const result = await response.json();
     if(result.ok){
-      // Limpiar también en Supabase para que no se restaure al siguiente login
-      await db.from('empresas').update({ certificado_cifrado: null, certificado_salt: null }).eq('id', USER.id);
+      // Limpiar ambos sistemas de almacenamiento en Supabase
+      await db.from('empresas').update({
+        certificado_cifrado: null, certificado_salt: null,
+        cert_b64: null, cert_pass: null, cert_filename: null,
+      }).eq('id', USER.id);
       mostrarEstadoCert(null);
       sv('c-cert-pass', '');
       const fileInput = document.getElementById('c-cert');
