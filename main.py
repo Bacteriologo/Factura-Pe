@@ -19,8 +19,11 @@ import httpx
 
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import padding as asym_padding
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_certificates
+from lxml import etree as lxml_etree
 from supabase import create_client, Client
 
 # ═══════════════════════════════════════
@@ -140,7 +143,21 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    # Verificar que lxml y cryptography están disponibles (requeridos para firma)
+    libs = {}
+    try:
+        import lxml; libs["lxml"] = lxml.__version__
+    except Exception as e:
+        libs["lxml"] = f"ERROR: {e}"
+    try:
+        import cryptography; libs["cryptography"] = cryptography.__version__
+    except Exception as e:
+        libs["cryptography"] = f"ERROR: {e}"
+    return {
+        "status": "healthy",
+        "firma_disponible": "ERROR" not in libs.get("lxml","") and "ERROR" not in libs.get("cryptography",""),
+        "libs": libs
+    }
 
 # ═══════════════════════════════════════
 #  CERTIFICADO DIGITAL
@@ -811,69 +828,105 @@ def generar_xml_ubl(ruc, tipo_doc, serie, numero, nombre_emisor, direccion_emiso
 def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
     """
     Firma el XML con XMLDSig (enveloped) usando el certificado P12.
+    Implementado con solo lxml + cryptography (sin signxml).
     El nodo ds:Signature se inyecta en ext:ExtensionContent según el
     estándar UBL/SUNAT Perú.
 
-    Requiere: signxml, lxml, cryptography
-    Si las librerías no están disponibles devuelve el XML sin firmar
-    (válido solo en entorno beta de SUNAT).
+    Algoritmos:
+      - Digest reference:    SHA-256
+      - Firma:               RSA-SHA-256 (PKCS1v15)
+      - Canonicalización:    C14N 1.0 (http://www.w3.org/TR/2001/REC-xml-c14n-20010315)
     """
+    DS      = "http://www.w3.org/2000/09/xmldsig#"
+    EXT_NS  = "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+    C14N    = "http://www.w3.org/TR/2001/REC-xml-c14n-20010315"
+    RSHA256 = "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"
+    DSHA256 = "http://www.w3.org/2001/04/xmlenc#sha256"
+    ENVEL   = "http://www.w3.org/2000/09/xmldsig#enveloped-signature"
+
     try:
-        from cryptography.hazmat.primitives.serialization.pkcs12 import load_key_and_certificates
-        from lxml import etree
-        from signxml import XMLSigner, methods
+        p12_pwd = password.encode("utf-8") if isinstance(password, str) else password
+        private_key, certificate, _ = load_key_and_certificates(p12_bytes, p12_pwd)
 
-        p12_password = password.encode("utf-8") if isinstance(password, str) else password
-        private_key, certificate, additional_certs = load_key_and_certificates(p12_bytes, p12_password)
+        root = lxml_etree.fromstring(xml_content.encode("utf-8"))
 
-        root = etree.fromstring(xml_content.encode("utf-8"))
-
-        # Namespace de UBL Extension
-        ext_ns = "urn:oasis:names:specification:ubl:schema:xsd:CommonExtensionComponents-2"
+        # Localizar ExtensionContent donde SUNAT exige la firma
         ext_content = root.find(
-            f"{{{ext_ns}}}UBLExtensions"
-            f"/{{{ext_ns}}}UBLExtension"
-            f"/{{{ext_ns}}}ExtensionContent"
+            f"{{{EXT_NS}}}UBLExtensions"
+            f"/{{{EXT_NS}}}UBLExtension"
+            f"/{{{EXT_NS}}}ExtensionContent"
         )
+        if ext_content is None:
+            raise RuntimeError("No se encontró ExtensionContent en el XML")
 
-        # Firmar documento completo con transform enveloped
-        signer = XMLSigner(
-            method=methods.enveloped,
-            signature_algorithm="rsa-sha256",
-            digest_algorithm="sha256",
-            c14n_algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315",
-        )
+        # ── 1. C14N del documento (antes de insertar la firma = enveloped-sig transform) ──
+        buf = io.BytesIO()
+        root.getroottree().write_c14n(buf, exclusive=False, with_comments=False)
+        doc_c14n = buf.getvalue()
 
-        signed_root = signer.sign(
+        # ── 2. Digest SHA-256 del Reference ────────────────────────────────────
+        h = hashes.Hash(hashes.SHA256())
+        h.update(doc_c14n)
+        digest_b64 = base64.b64encode(h.finalize()).decode()
+
+        # ── 3. Construir elemento SignedInfo ───────────────────────────────────
+        signed_info = lxml_etree.Element(f"{{{DS}}}SignedInfo", nsmap={"ds": DS})
+
+        c14n_m = lxml_etree.SubElement(signed_info, f"{{{DS}}}CanonicalizationMethod")
+        c14n_m.set("Algorithm", C14N)
+
+        sig_m = lxml_etree.SubElement(signed_info, f"{{{DS}}}SignatureMethod")
+        sig_m.set("Algorithm", RSHA256)
+
+        ref = lxml_etree.SubElement(signed_info, f"{{{DS}}}Reference")
+        ref.set("URI", "")
+
+        transforms = lxml_etree.SubElement(ref, f"{{{DS}}}Transforms")
+        t = lxml_etree.SubElement(transforms, f"{{{DS}}}Transform")
+        t.set("Algorithm", ENVEL)
+
+        dm = lxml_etree.SubElement(ref, f"{{{DS}}}DigestMethod")
+        dm.set("Algorithm", DSHA256)
+
+        dv = lxml_etree.SubElement(ref, f"{{{DS}}}DigestValue")
+        dv.text = digest_b64
+
+        # ── 4. C14N de SignedInfo → firmar con RSA-SHA256 ──────────────────────
+        buf2 = io.BytesIO()
+        lxml_etree.ElementTree(signed_info).write_c14n(buf2, exclusive=False, with_comments=False)
+        si_c14n = buf2.getvalue()
+
+        sig_bytes = private_key.sign(si_c14n, asym_padding.PKCS1v15(), hashes.SHA256())
+        sig_b64 = base64.b64encode(sig_bytes).decode()
+
+        # ── 5. Certificado en base64 (DER) ─────────────────────────────────────
+        cert_der = certificate.public_bytes(serialization.Encoding.DER)
+        cert_b64_str = base64.b64encode(cert_der).decode()
+
+        # ── 6. Ensamblar ds:Signature ──────────────────────────────────────────
+        sig_el = lxml_etree.Element(f"{{{DS}}}Signature", nsmap={"ds": DS})
+        sig_el.set("Id", "SignatureKG")
+        sig_el.append(signed_info)
+
+        sv = lxml_etree.SubElement(sig_el, f"{{{DS}}}SignatureValue")
+        sv.text = sig_b64
+
+        ki = lxml_etree.SubElement(sig_el, f"{{{DS}}}KeyInfo")
+        x5d = lxml_etree.SubElement(ki, f"{{{DS}}}X509Data")
+        x5c = lxml_etree.SubElement(x5d, f"{{{DS}}}X509Certificate")
+        x5c.text = cert_b64_str
+
+        # ── 7. Insertar firma en ExtensionContent (estándar SUNAT/UBL) ─────────
+        ext_content.append(sig_el)
+
+        return lxml_etree.tostring(
             root,
-            key=private_key,
-            cert=certificate,
-            reference_uri="",
-        )
-
-        # Mover la firma a ext:ExtensionContent (requerido por SUNAT/UBL)
-        ds_ns = "http://www.w3.org/2000/09/xmldsig#"
-        sig_element = signed_root.find(f"{{{ds_ns}}}Signature")
-
-        if sig_element is not None and ext_content is not None:
-            signed_root.remove(sig_element)
-            sig_element.set("Id", "SignatureKG")
-            ext_content.append(sig_element)
-
-        return etree.tostring(
-            signed_root,
             xml_declaration=True,
             encoding="UTF-8"
         ).decode("utf-8")
 
-    except ImportError as imp_err:
-        missing = str(imp_err).split("'")[-2] if "'" in str(imp_err) else str(imp_err)
-        raise RuntimeError(
-            f"Librería de firma digital no instalada: '{missing}'. "
-            "Ejecuta en el servidor: pip install signxml lxml cryptography"
-        )
     except Exception as e:
-        raise RuntimeError(f"Error al firmar el XML con el certificado: {e}")
+        raise RuntimeError(f"Error al firmar el XML: {e}")
 
 # ═══════════════════════════════════════
 #  CREAR ZIP
