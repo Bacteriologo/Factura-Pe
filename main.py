@@ -557,12 +557,8 @@ async def emitir_comprobante(
             descripcion_nc=descripcion_nc,
         )
 
-        # Firmar XML con certificado
-        cert = CERT_STORAGE.get(empresa_id)
-        if cert:
-            xml_firmado = firmar_xml(xml_content, cert["p12_bytes"], cert["password"])
-        else:
-            xml_firmado = xml_content
+        # Firmar XML con certificado (cert ya fue validado arriba)
+        xml_firmado = firmar_xml(xml_content, cert["p12_bytes"], cert["password"])
 
         # Crear ZIP
         zip_filename = f"{ruc_emisor}-{tipo_doc}-{serie}-{numero_str}"
