@@ -780,12 +780,12 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
   <div class="modal"><div class="mh"></div>
     <div class="mt2">Nuevo Producto</div><div class="ms2">Completa los datos</div>
     <div class="fr2 fg">
-      <div><label class="flbl">Código <span style="font-weight:400;color:var(--g600)">(opcional)</span></label><input class="fi" id="np-c" placeholder="Auto"></div>
+      <div><label class="flbl">Código <span style="font-weight:400;color:var(--g600)">(opcional)</span></label><input class="fi" id="np-c" placeholder="Auto" oninput="this.dataset.manual='1'"></div>
       <div><label class="flbl">Unidad SUNAT</label>
         <select class="fsel" id="np-u"><option value="NIU">NIU - Unidad</option><option value="ZZ">ZZ - Servicio</option><option value="KGM">KGM - Kg</option><option value="LTR">LTR - Litro</option></select>
       </div>
     </div>
-    <div class="fg"><label class="flbl">Nombre</label><input class="fi" id="np-n" placeholder="Pollo a la brasa (1/4)"></div>
+    <div class="fg"><label class="flbl">Nombre</label><input class="fi" id="np-n" placeholder="Pollo a la brasa (1/4)" oninput="onProdNameInput()"></div>
     <div class="fg"><label class="flbl">Categoría</label>
       <input class="fi" id="np-cat" placeholder="ej: PLATOS, BEBIDAS, ROPA, REPUESTOS..." list="cat-sugg">
       <datalist id="cat-sugg">
@@ -1790,6 +1790,25 @@ async function insertDefaultProds(uid){
   await db.from('productos').insert(rows);
 }
 
+// Genera un código relacionado con el nombre: iniciales de palabras + número correlativo
+function genCode(name){
+  const clean = name.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-zA-Z0-9\s]/g,' ');
+  const words  = clean.split(/\s+/).filter(w => w.length > 1);
+  let prefix = words.slice(0, 3).map(w => w[0].toUpperCase()).join('');
+  if(prefix.length < 2) prefix = clean.replace(/\s/g,'').slice(0, 3).toUpperCase();
+  if(!prefix) prefix = 'P';
+  const nums = PRODS.filter(p => p.code?.toUpperCase().startsWith(prefix))
+                    .map(p => parseInt(p.code.slice(prefix.length)) || 0);
+  const next = nums.length ? Math.max(...nums) + 1 : 1;
+  return prefix + String(next).padStart(3, '0');
+}
+function onProdNameInput(){
+  const name   = (document.getElementById('np-n')?.value || '').trim();
+  const codeEl = document.getElementById('np-c');
+  if(!codeEl || codeEl.dataset.manual) return; // el usuario ya escribió su propio código
+  codeEl.value = name.length >= 2 ? genCode(name) : '';
+}
+
 async function saveProd(){
   const name=(document.getElementById('np-n')?.value||'').trim();
   const price=parseFloat(document.getElementById('np-p')?.value)||0;
@@ -1797,7 +1816,7 @@ async function saveProd(){
   if(!USER){ toast('⚠️ Sesión expirada, recarga la página'); return; }
   try {
     const catVal = (gv('np-cat') || 'PRODUCTOS').trim().toUpperCase();
-    const row={ empresa_id:USER.id, code:gv('np-c')||'P'+Date.now().toString(36).slice(-4).toUpperCase(),
+    const row={ empresa_id:USER.id, code:gv('np-c')||genCode(name),
       name, price, unit:gv('np-u')||'NIU', categoria:catVal, ico:'📦', stock:parseInt(gv('np-s'))||0, activo:true };
     const { data, error } = await db.from('productos').insert([row]).select().single();
     if(error){
@@ -1810,6 +1829,7 @@ async function saveProd(){
     ST.cf = 'TODOS'; ST.cq = '';
     buildCatFilters(); renderCat(); buildQT();
     ['np-n','np-c','np-p','np-s','np-cat'].forEach(id=>sv(id,''));
+    document.getElementById('np-c').dataset.manual = '';
     document.getElementById('np-u').value = 'NIU';
     closeOv('ov-ap');
     goTo('s-cat','cat');
