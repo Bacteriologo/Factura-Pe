@@ -884,6 +884,8 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
         transforms = lxml_etree.SubElement(ref, f"{{{DS}}}Transforms")
         t = lxml_etree.SubElement(transforms, f"{{{DS}}}Transform")
         t.set("Algorithm", ENVEL)
+        t2 = lxml_etree.SubElement(transforms, f"{{{DS}}}Transform")
+        t2.set("Algorithm", C14N)
 
         dm = lxml_etree.SubElement(ref, f"{{{DS}}}DigestMethod")
         dm.set("Algorithm", DSHA256)
