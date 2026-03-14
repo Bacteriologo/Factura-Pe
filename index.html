@@ -2396,7 +2396,9 @@ async function emitDoc(){
 
       // Texto de ayuda según el código de error
       let helpText = '';
-      if(errorCode === 'NO_CERT'){
+      if(errorCode === 'FIRMA_ERR' || errorMsg.toLowerCase().includes('librería de firma') || errorMsg.toLowerCase().includes('no instalada')){
+        helpText = '\n\n💡 PROBLEMA DE FIRMA DIGITAL EN EL SERVIDOR:\nLas librerías de firma (signxml, lxml, cryptography)\nno están instaladas en el backend.\n\nSOLUCIÓN EN EL SERVIDOR:\npip install signxml lxml cryptography\n\nSi el backend es externo, contacta al administrador.';
+      } else if(errorCode === 'NO_CERT'){
         helpText = '\n\n💡 SOLUCIÓN:\n1. Ve a Configuración (⚙️)\n2. Carga tu certificado digital (.p12 o .pfx)\n3. Ingresa la contraseña del certificado\n4. Vuelve a intentar emitir';
       } else if(errorCode === 'NO_CERT_PASS'){
         helpText = '\n\n💡 SOLUCIÓN:\nVuelve a cargar el certificado en Configuración e ingresa la contraseña correcta.';
@@ -2411,7 +2413,9 @@ async function emitDoc(){
           `SOLUCIÓN (solo para pruebas beta):\nVe a Configuración (⚙️) y cambia\n`+
           `Serie ${ST.dt==='BOLETA'?'Boleta':'Factura'} a "${serieEsperada}".\n\n`+
           `En PRODUCCIÓN podrás usar tu serie real (ej: E001).`;
-      } else if(errorMsg.toLowerCase().includes('firma') || errorMsg.toLowerCase().includes('signature')){
+      } else if(errorMsg.toLowerCase().includes('no signature') || errorMsg.toLowerCase().includes('signature')){
+        helpText = '\n\n💡 El XML llegó a SUNAT sin firma digital.\nPOSIBLES CAUSAS:\n- Librerías de firma no instaladas en el servidor\n- Certificado con contraseña incorrecta\n- Error interno al firmar\n\nSOLUCIÓN:\n1. Recarga el certificado en Configuración\n2. Si el error persiste, revisa el servidor:\n   pip install signxml lxml cryptography';
+      } else if(errorMsg.toLowerCase().includes('firma') || errorMsg.toLowerCase().includes('alterado')){
         helpText = '\n\n💡 POSIBLES CAUSAS:\n- Certificado vencido\n- Contraseña incorrecta\n- Archivo corrupto\n\nSOLUCIÓN: Recarga el certificado en Configuración';
       } else if(/^[23]\d{3}$/.test(errorCode)){
         helpText = '\n\n💡 Código SUNAT ' + errorCode + ':\nRevisa la guía de códigos de error en:\nhttps://cpe.sunat.gob.pe/manuales';

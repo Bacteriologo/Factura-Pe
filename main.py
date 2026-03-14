@@ -586,11 +586,14 @@ async def emitir_comprobante(
         return resultado
 
     except Exception as e:
+        error_msg = str(e)
+        # Código específico para errores de firma para mejor UX en frontend
+        codigo = "FIRMA_ERR" if "firmar" in error_msg.lower() or "firma" in error_msg.lower() or "sign" in error_msg.lower() or "librería" in error_msg.lower() else "ERR_BACKEND"
         return JSONResponse({
             "ok": False,
             "estado": "ERROR",
-            "error_sunat": str(e),
-            "codigo": "ERR_BACKEND"
+            "error_sunat": error_msg,
+            "codigo": codigo
         }, status_code=500)
 
 # ═══════════════════════════════════════
@@ -844,12 +847,14 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
             encoding="UTF-8"
         ).decode("utf-8")
 
-    except ImportError:
-        print("[WARNING] signxml/cryptography/lxml no disponibles. XML enviado sin firma.")
-        return xml_content
+    except ImportError as imp_err:
+        missing = str(imp_err).split("'")[-2] if "'" in str(imp_err) else str(imp_err)
+        raise RuntimeError(
+            f"Librería de firma digital no instalada: '{missing}'. "
+            "Ejecuta en el servidor: pip install signxml lxml cryptography"
+        )
     except Exception as e:
-        print(f"[WARNING] Error al firmar XML: {e}")
-        return xml_content
+        raise RuntimeError(f"Error al firmar el XML con el certificado: {e}")
 
 # ═══════════════════════════════════════
 #  CREAR ZIP
