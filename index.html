@@ -1350,11 +1350,15 @@ function updateGDriveStatus(){
   }
 }
 function connectGDrive(){
-  const CLIENT_ID = '801045063045-ebm4t4ofp830u8ouobfvjp0fpeu37df5.apps.googleusercontent.com'; // TODO: Configurar en Google Cloud Console
+  const CLIENT_ID    = '801045063045-ebm4t4ofp830u8ouobfvjp0fpeu37df5.apps.googleusercontent.com';
   const REDIRECT_URI = window.location.origin + window.location.pathname;
-  const SCOPE = 'https://www.googleapis.com/auth/drive.file';
-  const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}`;
-  window.location.href = authUrl;
+  const SCOPE        = 'https://www.googleapis.com/auth/drive.file';
+  const authUrl      = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}`;
+  // Popup: la app principal no navega — la sesión permanece viva
+  const w = 520, h = 640;
+  const left = Math.max(0, (screen.width  - w) / 2);
+  const top  = Math.max(0, (screen.height - h) / 2);
+  window.open(authUrl, 'gdrive_oauth', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
 }
 function disconnectGDrive(){
   GDRIVE_TOKEN = null;
@@ -1366,24 +1370,36 @@ function disconnectGDrive(){
   db.from('empresas').update({ gdrive_token: null, gdrive_enabled: false }).eq('id', USER.id);
   toast('✓ Google Drive desconectado');
 }
-// Capturar token de OAuth redirect
-window.addEventListener('load', () => {
+// ── Popup: detectar que somos el popup de OAuth y devolver token al padre ──
+(function(){
   const hash = window.location.hash;
-  if(hash && hash.includes('access_token')){
+  if(hash && hash.includes('access_token') && window.opener){
     const params = new URLSearchParams(hash.substring(1));
-    const token = params.get('access_token');
+    const token  = params.get('access_token');
     if(token){
-      GDRIVE_TOKEN = token;
-      GDRIVE_ENABLED = true;
-      db.from('empresas').update({ gdrive_token: token, gdrive_enabled: true }).eq('id', USER.id);
-      window.history.replaceState(null, '', window.location.pathname);
-      toast('✓ Google Drive conectado');
-      updateGDriveStatus();
-      setTgEl('tg-gdrive', true);
-      document.getElementById('gdrive-connected').style.display = 'block';
+      // Enviar token a la ventana principal y cerrar el popup
+      window.opener.postMessage({ type:'gdrive_token', token }, window.location.origin);
+      window.close();
     }
   }
+})();
+
+// ── Ventana principal: recibir token del popup ──
+window.addEventListener('message', (e) => {
+  if(e.origin !== window.location.origin) return;
+  if(e.data?.type === 'gdrive_token' && e.data.token) _applyGDriveToken(e.data.token);
 });
+
+function _applyGDriveToken(token){
+  GDRIVE_TOKEN   = token;
+  GDRIVE_ENABLED = true;
+  db.from('empresas').update({ gdrive_token: token, gdrive_enabled: true }).eq('id', USER.id);
+  updateGDriveStatus();
+  setTgEl('tg-gdrive', true);
+  document.getElementById('gdrive-connect').style.display    = 'none';
+  document.getElementById('gdrive-connected').style.display  = 'block';
+  toast('✓ Google Drive conectado');
+}
 async function uploadPDFToDrive(pdfBlob, filename, docData){
   if(!GDRIVE_TOKEN || !GDRIVE_ENABLED) return;
   try {
