@@ -501,41 +501,35 @@ async def emitir_comprobante(
         }
         tipo_doc = tipo_doc_map[tipo]
 
-        # Validar formato de serie según tipo de documento (SUNAT error 1773)
-        if tipo == "BOLETA" and not serie.upper().startswith("B"):
-            return JSONResponse({
-                "ok": False,
-                "estado": "ERROR",
-                "codigo": "1773",
-                "error_sunat": (
-                    f"Serie inválida para BOLETA: '{serie}'. "
-                    "Las boletas deben usar series que empiecen con 'B' (ej: B001). "
-                    "Corrígelo en Configuración → Serie Boleta."
-                )
-            }, status_code=400)
+        # En beta/homologación SUNAT exige formato estricto de serie:
+        # Boleta → B***, Factura → F***
+        # En producción se acepta la serie registrada (ej: E001 si la empresa ya la tiene)
+        if ambiente == "beta":
+            if tipo == "BOLETA" and not serie.upper().startswith("B"):
+                return JSONResponse({
+                    "ok": False,
+                    "estado": "ERROR",
+                    "codigo": "1773_BETA",
+                    "error_sunat": (
+                        f"En el entorno BETA, la serie de BOLETA debe empezar con 'B' (ej: B001). "
+                        f"Serie actual: '{serie}'. "
+                        "Cambia la Serie Boleta en Configuración solo para las pruebas. "
+                        "En producción puedes usar tu serie real."
+                    )
+                }, status_code=400)
 
-        if tipo == "FACTURA" and not serie.upper().startswith("F"):
-            return JSONResponse({
-                "ok": False,
-                "estado": "ERROR",
-                "codigo": "1773",
-                "error_sunat": (
-                    f"Serie inválida para FACTURA: '{serie}'. "
-                    "Las facturas deben usar series que empiecen con 'F' (ej: F001). "
-                    "Corrígelo en Configuración → Serie Factura."
-                )
-            }, status_code=400)
-
-        if tipo == "NOTA_CREDITO" and not serie.upper().startswith(("B", "F")):
-            return JSONResponse({
-                "ok": False,
-                "estado": "ERROR",
-                "codigo": "1773",
-                "error_sunat": (
-                    f"Serie inválida para NOTA DE CRÉDITO: '{serie}'. "
-                    "Debe empezar con 'B' o 'F' según el comprobante que anula."
-                )
-            }, status_code=400)
+            if tipo == "FACTURA" and not serie.upper().startswith("F"):
+                return JSONResponse({
+                    "ok": False,
+                    "estado": "ERROR",
+                    "codigo": "1773_BETA",
+                    "error_sunat": (
+                        f"En el entorno BETA, la serie de FACTURA debe empezar con 'F' (ej: F001). "
+                        f"Serie actual: '{serie}'. "
+                        "Cambia la Serie Factura en Configuración solo para las pruebas. "
+                        "En producción puedes usar tu serie real (ej: E001)."
+                    )
+                }, status_code=400)
 
         # Calcular montos
         base_imponible = round(total_num / 1.18, 2)

@@ -658,6 +658,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
           <span style="color:var(--g600)">—</span>
           <input class="fi" id="c-nf" placeholder="000001" style="flex:1" inputmode="numeric">
         </div>
+        <div style="font-size:10px;color:var(--gold);background:rgba(255,193,7,.07);border-radius:6px;padding:6px 8px;margin-bottom:7px;line-height:1.5">
+          <b>BETA:</b> usa B001 y F001. &nbsp;<b>PRODUCCIÓN:</b> usa tu serie real (ej: E001).
+        </div>
         <div style="display:flex;gap:7px;align-items:center;margin-bottom:9px">
           <span style="font-size:12px;color:var(--g400);width:90px;flex-shrink:0">Nota Crédito</span>
           <input class="fi" id="c-snc" placeholder="NC01" style="width:72px;flex-shrink:0">
@@ -1568,11 +1571,13 @@ async function saveCfg(){
   CFG.snc=gv('c-snc')||'NC01'; CFG.nnc=parseInt(gv('c-nnc'))||1;
   CFG.snv=gv('c-snv')||'NV01'; CFG.nnv=parseInt(gv('c-nnv'))||1;
   CFG.waNum=gv('c-wa'); CFG.waMsg=gv('c-wam');
-  // Validar formato de series (SUNAT error 1773)
-  const serieWarnings=[];
-  if(!CFG.sb.toUpperCase().startsWith('B')) serieWarnings.push(`• Serie Boleta "${CFG.sb}" debe empezar con B (ej: B001)`);
-  if(!CFG.sf.toUpperCase().startsWith('F')) serieWarnings.push(`• Serie Factura "${CFG.sf}" debe empezar con F (ej: F001)`);
-  if(serieWarnings.length) toast('⚠️ Series inválidas:\n'+serieWarnings.join('\n'), 6000);
+  // En beta: advertir si las series no tienen formato estándar (SUNAT 1773)
+  if(CFG.env==='beta'){
+    const bwarn=[];
+    if(!CFG.sb.toUpperCase().startsWith('B')) bwarn.push(`Serie Boleta "${CFG.sb}" → usa B001 para pruebas beta`);
+    if(!CFG.sf.toUpperCase().startsWith('F')) bwarn.push(`Serie Factura "${CFG.sf}" → usa F001 para pruebas beta`);
+    if(bwarn.length) toast('⚠️ Modo BETA: '+bwarn.join(' | '), 7000);
+  }
   const payload = {
     id:USER.id, ruc:CFG.ruc, nombre:CFG.nom, direccion:CFG.dir, ubigeo:CFG.ubi,
     usuario_sol:CFG.su, clave_sol:CFG.sp, entorno:CFG.env,
@@ -2328,15 +2333,17 @@ async function emitDoc(){
         helpText = '\n\n💡 SOLUCIÓN:\n1. Ve a Configuración (⚙️)\n2. Carga tu certificado digital (.p12 o .pfx)\n3. Ingresa la contraseña del certificado\n4. Vuelve a intentar emitir';
       } else if(errorCode === 'NO_CERT_PASS'){
         helpText = '\n\n💡 SOLUCIÓN:\nVuelve a cargar el certificado en Configuración e ingresa la contraseña correcta.';
-      } else if(errorCode === '1773' || errorMsg.includes('ZIP') || errorMsg.includes('nombre del archivo') || errorMsg.includes('Serie inválida')){
+      } else if(errorCode === '1773_BETA' || errorCode === '1773' || errorMsg.includes('ZIP') || errorMsg.includes('nombre del archivo') || errorMsg.includes('entorno BETA')){
         const serieActual = ST.dt==='BOLETA' ? CFG.sb : CFG.sf;
         const serieEsperada = ST.dt==='BOLETA' ? 'B001' : 'F001';
-        helpText = `\n\n💡 CAUSA: Serie incorrecta para ${ST.dt}\n`+
+        helpText = `\n\n💡 CAUSA: Serie inválida para el entorno BETA\n`+
           `Serie configurada: "${serieActual}"\n\n`+
-          `SUNAT requiere:\n`+
-          `  • Boletas  → serie B001, B002...\n`+
-          `  • Facturas → serie F001, F002...\n\n`+
-          `SOLUCIÓN: Ve a Configuración (⚙️)\ny cambia la Serie ${ST.dt==='BOLETA'?'Boleta':'Factura'} a "${serieEsperada}".`;
+          `En BETA, SUNAT exige series estándar:\n`+
+          `  • Boletas  → B001, B002...\n`+
+          `  • Facturas → F001, F002...\n\n`+
+          `SOLUCIÓN (solo para pruebas beta):\nVe a Configuración (⚙️) y cambia\n`+
+          `Serie ${ST.dt==='BOLETA'?'Boleta':'Factura'} a "${serieEsperada}".\n\n`+
+          `En PRODUCCIÓN podrás usar tu serie real (ej: E001).`;
       } else if(errorMsg.toLowerCase().includes('firma') || errorMsg.toLowerCase().includes('signature')){
         helpText = '\n\n💡 POSIBLES CAUSAS:\n- Certificado vencido\n- Contraseña incorrecta\n- Archivo corrupto\n\nSOLUCIÓN: Recarga el certificado en Configuración';
       } else if(/^[23]\d{3}$/.test(errorCode)){
