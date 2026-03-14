@@ -1188,8 +1188,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // Con persistSession:false siempre arranca en pantalla de login
-  showAuth();
+  // Retorno mobile de OAuth GDrive: restaurar sesión Supabase desde sessionStorage
+  if(window._pendingSupabaseSession){
+    // setSession dispara onAuthStateChange → SIGNED_IN → onLogin() automático
+    db.auth.setSession(window._pendingSupabaseSession);
+    window._pendingSupabaseSession = null;
+  } else {
+    // Flujo normal: pedir login
+    showAuth();
+  }
 });
 
 // ═══════════════════════════════════════════
@@ -1266,6 +1273,9 @@ async function onLogin(){
   const av=document.getElementById('sb-user');
   if(av) av.textContent=(email[0]||'U').toUpperCase();
   await checkWelcome();
+  // Móvil: aplicar token de Google Drive pendiente tras restaurar sesión
+  const pendingGDrive = sessionStorage.getItem('_gdrive_token_pending');
+  if(pendingGDrive){ sessionStorage.removeItem('_gdrive_token_pending'); _applyGDriveToken(pendingGDrive); }
 }
 
 // ═══════════════════════════════════════════
@@ -1349,16 +1359,34 @@ function updateGDriveStatus(){
     status.style.color = 'var(--g600)';
   }
 }
-function connectGDrive(){
+async function connectGDrive(){
   const CLIENT_ID    = '801045063045-ebm4t4ofp830u8ouobfvjp0fpeu37df5.apps.googleusercontent.com';
   const REDIRECT_URI = window.location.origin + window.location.pathname;
   const SCOPE        = 'https://www.googleapis.com/auth/drive.file';
   const authUrl      = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=token&scope=${encodeURIComponent(SCOPE)}`;
-  // Popup: la app principal no navega — la sesión permanece viva
-  const w = 520, h = 640;
-  const left = Math.max(0, (screen.width  - w) / 2);
-  const top  = Math.max(0, (screen.height - h) / 2);
-  window.open(authUrl, 'gdrive_oauth', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+
+  const isMobile = window.innerWidth <= 768 || /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+  if(!isMobile){
+    // Desktop: popup — la app principal no navega, sesión viva
+    const w = 520, h = 640;
+    const left = Math.max(0, (screen.width  - w) / 2);
+    const top  = Math.max(0, (screen.height - h) / 2);
+    window.open(authUrl, 'gdrive_oauth', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+    return;
+  }
+
+  // Móvil: window.opener=null en iOS/Android → usar redirect con puente de sesión
+  // Guardar tokens de Supabase en sessionStorage antes de salir
+  const { data:{ session } } = await db.auth.getSession();
+  if(session){
+    sessionStorage.setItem('_gdrive_session', JSON.stringify({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    }));
+  }
+  sessionStorage.setItem('_gdrive_pending', '1');
+  window.location.href = authUrl;
 }
 function disconnectGDrive(){
   GDRIVE_TOKEN = null;
@@ -1370,17 +1398,31 @@ function disconnectGDrive(){
   db.from('empresas').update({ gdrive_token: null, gdrive_enabled: false }).eq('id', USER.id);
   toast('✓ Google Drive desconectado');
 }
-// ── Popup: detectar que somos el popup de OAuth y devolver token al padre ──
+// ── OAuth return: detectar si somos popup (desktop) o redirect (móvil) ──
 (function(){
   const hash = window.location.hash;
-  if(hash && hash.includes('access_token') && window.opener){
-    const params = new URLSearchParams(hash.substring(1));
-    const token  = params.get('access_token');
-    if(token){
-      // Enviar token a la ventana principal y cerrar el popup
-      window.opener.postMessage({ type:'gdrive_token', token }, window.location.origin);
-      window.close();
+  if(!hash || !hash.includes('access_token')) return;
+  const params = new URLSearchParams(hash.substring(1));
+  const token  = params.get('access_token');
+  if(!token) return;
+
+  if(window.opener){
+    // Desktop popup → enviar token al padre y cerrar
+    window.opener.postMessage({ type:'gdrive_token', token }, window.location.origin);
+    window.close();
+    return;
+  }
+
+  // Móvil redirect → guardar token GDrive y restaurar sesión Supabase
+  if(sessionStorage.getItem('_gdrive_pending')){
+    sessionStorage.removeItem('_gdrive_pending');
+    sessionStorage.setItem('_gdrive_token_pending', token);
+    const savedSess = sessionStorage.getItem('_gdrive_session');
+    if(savedSess){
+      sessionStorage.removeItem('_gdrive_session');
+      try { window._pendingSupabaseSession = JSON.parse(savedSess); } catch(e){}
     }
+    window.history.replaceState(null, '', window.location.pathname);
   }
 })();
 
