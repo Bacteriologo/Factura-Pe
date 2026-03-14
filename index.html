@@ -1304,12 +1304,16 @@ async function loadEmpresa(){
       igvOn: data.igv_activo !== false,
     };
     applyCfg();
-    GDRIVE_TOKEN = data.gdrive_token || null;
-    GDRIVE_ENABLED = data.gdrive_enabled || false;
-    setTgEl('tg-gdrive', GDRIVE_ENABLED);
-    if(GDRIVE_ENABLED && GDRIVE_TOKEN){
-      document.getElementById('gdrive-connected').style.display = 'block';
+    // Restaurar config de Google Drive: DB primero, localStorage como respaldo
+    GDRIVE_TOKEN   = data.gdrive_token   || localStorage.getItem('gdrive_token')   || null;
+    GDRIVE_ENABLED = data.gdrive_enabled || localStorage.getItem('gdrive_enabled') === 'true' || false;
+    // Si el respaldo local tenía datos pero la DB no, re-sincronizar con DB
+    if(GDRIVE_TOKEN && !data.gdrive_token){
+      db.from('empresas').update({ gdrive_token: GDRIVE_TOKEN, gdrive_enabled: GDRIVE_ENABLED }).eq('id', USER.id);
     }
+    setTgEl('tg-gdrive', GDRIVE_ENABLED);
+    document.getElementById('gdrive-connect').style.display   = (GDRIVE_ENABLED && !GDRIVE_TOKEN) ? 'block' : 'none';
+    document.getElementById('gdrive-connected').style.display = (GDRIVE_ENABLED && GDRIVE_TOKEN)  ? 'block' : 'none';
     updateGDriveStatus();
 
     // Restaurar certificado si el backend lo perdió (Railway reinicio)
@@ -1396,6 +1400,8 @@ async function connectGDrive(){
 function disconnectGDrive(){
   GDRIVE_TOKEN = null;
   GDRIVE_ENABLED = false;
+  localStorage.removeItem('gdrive_token');
+  localStorage.removeItem('gdrive_enabled');
   setTgEl('tg-gdrive', false);
   document.getElementById('gdrive-connect').style.display = 'none';
   document.getElementById('gdrive-connected').style.display = 'none';
@@ -1437,10 +1443,15 @@ window.addEventListener('message', (e) => {
   if(e.data?.type === 'gdrive_token' && e.data.token) _applyGDriveToken(e.data.token);
 });
 
-function _applyGDriveToken(token){
+async function _applyGDriveToken(token){
   GDRIVE_TOKEN   = token;
   GDRIVE_ENABLED = true;
-  db.from('empresas').update({ gdrive_token: token, gdrive_enabled: true }).eq('id', USER.id);
+  // Guardar en localStorage como respaldo inmediato (no depende de la sesión activa)
+  localStorage.setItem('gdrive_token',   token);
+  localStorage.setItem('gdrive_enabled', 'true');
+  // Sincronizar con Supabase DB (para acceso multi-dispositivo)
+  const { error } = await db.from('empresas').update({ gdrive_token: token, gdrive_enabled: true }).eq('id', USER.id);
+  if(error) console.warn('gdrive DB sync error:', error.message);
   updateGDriveStatus();
   setTgEl('tg-gdrive', true);
   document.getElementById('gdrive-connect').style.display    = 'none';
