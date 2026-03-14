@@ -859,18 +859,22 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
         if ext_content is None:
             raise RuntimeError("No se encontró ExtensionContent en el XML")
 
-        # ── 1. C14N del documento (antes de insertar la firma = enveloped-sig transform) ──
+        # ── 1. C14N documento SIN firma → DigestValue de la Reference ──────────
+        import hashlib as _hashlib
         buf = io.BytesIO()
         root.getroottree().write_c14n(buf, exclusive=False, with_comments=False)
         doc_c14n = buf.getvalue()
+        digest_b64 = base64.b64encode(_hashlib.sha256(doc_c14n).digest()).decode()
 
-        # ── 2. Digest SHA-256 del Reference ────────────────────────────────────
-        h = hashes.Hash(hashes.SHA256())
-        h.update(doc_c14n)
-        digest_b64 = base64.b64encode(h.finalize()).decode()
+        # ── 2. Certificado en base64 (DER) ─────────────────────────────────────
+        cert_der = certificate.public_bytes(serialization.Encoding.DER)
+        cert_b64_str = base64.b64encode(cert_der).decode()
 
-        # ── 3. Construir elemento SignedInfo ───────────────────────────────────
-        signed_info = lxml_etree.Element(f"{{{DS}}}SignedInfo", nsmap={"ds": DS})
+        # ── 3. Construir estructura ds:Signature completa (SignatureValue vacío) ─
+        sig_el = lxml_etree.Element(f"{{{DS}}}Signature", nsmap={"ds": DS})
+        sig_el.set("Id", "SignatureKG")
+
+        signed_info = lxml_etree.SubElement(sig_el, f"{{{DS}}}SignedInfo")
 
         c14n_m = lxml_etree.SubElement(signed_info, f"{{{DS}}}CanonicalizationMethod")
         c14n_m.set("Algorithm", C14N)
@@ -884,6 +888,8 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
         transforms = lxml_etree.SubElement(ref, f"{{{DS}}}Transforms")
         t = lxml_etree.SubElement(transforms, f"{{{DS}}}Transform")
         t.set("Algorithm", ENVEL)
+        t2 = lxml_etree.SubElement(transforms, f"{{{DS}}}Transform")
+        t2.set("Algorithm", C14N)
 
         dm = lxml_etree.SubElement(ref, f"{{{DS}}}DigestMethod")
         dm.set("Algorithm", DSHA256)
@@ -891,33 +897,21 @@ def firmar_xml(xml_content: str, p12_bytes: bytes, password: str) -> str:
         dv = lxml_etree.SubElement(ref, f"{{{DS}}}DigestValue")
         dv.text = digest_b64
 
-        # ── 4. C14N de SignedInfo → firmar con RSA-SHA256 ──────────────────────
-        buf2 = io.BytesIO()
-        lxml_etree.ElementTree(signed_info).write_c14n(buf2, exclusive=False, with_comments=False)
-        si_c14n = buf2.getvalue()
-
-        sig_bytes = private_key.sign(si_c14n, asym_padding.PKCS1v15(), hashes.SHA256())
-        sig_b64 = base64.b64encode(sig_bytes).decode()
-
-        # ── 5. Certificado en base64 (DER) ─────────────────────────────────────
-        cert_der = certificate.public_bytes(serialization.Encoding.DER)
-        cert_b64_str = base64.b64encode(cert_der).decode()
-
-        # ── 6. Ensamblar ds:Signature ──────────────────────────────────────────
-        sig_el = lxml_etree.Element(f"{{{DS}}}Signature", nsmap={"ds": DS})
-        sig_el.set("Id", "SignatureKG")
-        sig_el.append(signed_info)
-
         sv = lxml_etree.SubElement(sig_el, f"{{{DS}}}SignatureValue")
-        sv.text = sig_b64
 
         ki = lxml_etree.SubElement(sig_el, f"{{{DS}}}KeyInfo")
         x5d = lxml_etree.SubElement(ki, f"{{{DS}}}X509Data")
         x5c = lxml_etree.SubElement(x5d, f"{{{DS}}}X509Certificate")
         x5c.text = cert_b64_str
 
-        # ── 7. Insertar firma en ExtensionContent (estándar SUNAT/UBL) ─────────
+        # ── 4. Insertar firma en documento ANTES de calcular la firma ────────────
+        # (necesario para que C14N de SignedInfo incluya namespaces del documento)
         ext_content.append(sig_el)
+
+        # ── 5. C14N de SignedInfo EN CONTEXTO del documento → firmar ────────────
+        si_c14n = lxml_etree.tostring(signed_info, method="c14n", exclusive=False, with_comments=False)
+        sig_bytes = private_key.sign(si_c14n, asym_padding.PKCS1v15(), hashes.SHA256())
+        sv.text = base64.b64encode(sig_bytes).decode()
 
         return lxml_etree.tostring(
             root,
