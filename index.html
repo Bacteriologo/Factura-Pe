@@ -1082,6 +1082,8 @@ CREATE TABLE IF NOT EXISTS empresas (
   cert_filename TEXT,
   cert_b64 TEXT,
   cert_pass TEXT,
+  gdrive_token TEXT,
+  gdrive_enabled BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now()
 );
 -- ── MIGRACIÓN para bases de datos existentes ──────────────────────────
@@ -1092,6 +1094,8 @@ ALTER TABLE empresas ADD COLUMN IF NOT EXISTS num_nv INT DEFAULT 1;
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_filename TEXT;
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_b64 TEXT;
 ALTER TABLE empresas ADD COLUMN IF NOT EXISTS cert_pass TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS gdrive_token TEXT;
+ALTER TABLE empresas ADD COLUMN IF NOT EXISTS gdrive_enabled BOOLEAN DEFAULT false;
 
 -- 2. Tabla de comprobantes
 CREATE TABLE IF NOT EXISTS comprobantes (
@@ -1344,6 +1348,7 @@ function flipGDrive(){
   document.getElementById('gdrive-connect').style.display = GDRIVE_ENABLED && !GDRIVE_TOKEN ? 'block' : 'none';
   document.getElementById('gdrive-connected').style.display = GDRIVE_ENABLED && GDRIVE_TOKEN ? 'block' : 'none';
   updateGDriveStatus();
+  db.from('empresas').update({ gdrive_enabled: GDRIVE_ENABLED }).eq('id', USER.id);
 }
 function updateGDriveStatus(){
   const status = document.getElementById('gdrive-status');
