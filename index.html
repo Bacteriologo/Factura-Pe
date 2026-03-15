@@ -134,6 +134,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
 .flbl{display:block;font-size:10px;color:var(--g600);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
 .fi{width:100%;padding:11px 13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s;-webkit-appearance:none}
 .fi:focus{border-color:rgba(0,201,167,.5);background:rgba(0,201,167,.04);box-shadow:0 0 0 3px rgba(0,201,167,.1)}
+.pw-wrap{position:relative;display:flex;align-items:center}
+.pw-wrap .fi{padding-right:40px}
+.pw-eye{position:absolute;right:11px;background:none;border:none;cursor:pointer;color:var(--g600);font-size:17px;line-height:1;padding:4px;transition:color .15s;flex-shrink:0;user-select:none}
+.pw-eye:hover{color:var(--teal)}
 .fi::placeholder{color:#2D4A7A}
 .fsel{width:100%;padding:11px 13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;-webkit-appearance:none;cursor:pointer}
 .fsel option{background:var(--navy3)}
@@ -295,7 +299,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div class="fg"><label class="flbl">Correo electrónico</label>
         <input class="fi" id="in-email" type="email" placeholder="correo@empresa.com" inputmode="email" autocomplete="email"></div>
       <div class="fg"><label class="flbl">Contraseña</label>
-        <input class="fi" id="in-pass" type="password" placeholder="••••••••" autocomplete="current-password"></div>
+        <div class="pw-wrap"><input class="fi" id="in-pass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pw-eye" onclick="togglePw('in-pass',this)" tabindex="-1">👁</button></div></div>
       <button class="btn bp fw btn-lg" id="btn-in" onclick="doLogin()" style="margin-top:4px">Entrar →</button>
       <div style="text-align:center;margin-top:14px">
         <span style="font-size:12px;color:var(--g600);cursor:pointer" onclick="authTab('reset')">¿Olvidaste tu contraseña?</span>
@@ -311,7 +315,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div class="fg"><label class="flbl">Correo electrónico</label>
         <input class="fi" id="reg-email" type="email" placeholder="correo@empresa.com" inputmode="email"></div>
       <div class="fg"><label class="flbl">Contraseña</label>
-        <input class="fi" id="reg-pass" type="password" placeholder="Mínimo 8 caracteres"></div>
+        <div class="pw-wrap"><input class="fi" id="reg-pass" type="password" placeholder="Mínimo 8 caracteres"><button type="button" class="pw-eye" onclick="togglePw('reg-pass',this)" tabindex="-1">👁</button></div></div>
       <button class="btn bp fw btn-lg" id="btn-reg" onclick="doRegister()" style="margin-top:4px">Crear cuenta →</button>
     </div>
 
@@ -606,7 +610,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div class="warn-b">⚠️ En producción estas credenciales van en el backend FastAPI cifradas.</div>
       <div class="fr2 fg">
         <div><label class="flbl">Usuario SOL</label><input class="fi" id="c-su" placeholder="RSUP001"></div>
-        <div><label class="flbl">Clave SOL</label><input class="fi" id="c-sp" type="password" placeholder="••••••••"></div>
+        <div><label class="flbl">Clave SOL</label><div class="pw-wrap"><input class="fi" id="c-sp" type="password" placeholder="••••••••"><button type="button" class="pw-eye" onclick="togglePw('c-sp',this)" tabindex="-1">👁</button></div></div>
       </div>
       <div class="fg"><label class="flbl">Entorno SUNAT</label>
         <select class="fsel" id="c-env" onchange="onEnvChange(this.value)"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
@@ -625,7 +629,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         </div>
         <div class="fg">
           <label class="flbl">Contraseña del certificado</label>
-          <input class="fi" id="c-cert-pass" type="password" placeholder="••••••••">
+          <div class="pw-wrap"><input class="fi" id="c-cert-pass" type="password" placeholder="••••••••"><button type="button" class="pw-eye" onclick="togglePw('c-cert-pass',this)" tabindex="-1">👁</button></div>
         </div>
         <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
           📤 Cargar Certificado
@@ -2794,6 +2798,7 @@ if(ovCorr){
     }
   });
 }
+function togglePw(id, btn){ const el=document.getElementById(id); if(!el) return; const show=el.type==='password'; el.type=show?'text':'password'; btn.textContent=show?'🙈':'👁'; }
 let _tt;
 function toast(msg, duration=2800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), duration); }
 function showSuccess(title, sub){
