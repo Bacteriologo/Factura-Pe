@@ -54,6 +54,8 @@ CERT_STORAGE: dict = {}
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://kwmhqkgcyomvqkklvqtp.supabase.co")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imt3bWhxa2djeW9tdnFra2x2cXRwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyNTQwMjEsImV4cCI6MjA4ODgzMDAyMX0.oWCmTlUgQtDHI7PXhsW53dSwmu9Y1UtPORTW8pt3VJU")
 
+DECOLECTA_KEY = os.getenv("DECOLECTA_KEY", "sk_13958.n3vXxo55kzIUhj1z0tr8nc14ToqNnw1o")
+
 try:
     supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
     print("✓ Supabase conectado correctamente")
@@ -362,13 +364,30 @@ async def consulta_dni(dni: str):
     if len(dni) != 8 or not dni.isdigit():
         return {"ok": False, "error": "DNI debe tener 8 dígitos"}
 
-    apis = [
-        f"https://apiperu.dev/api/dni/{dni}",
-        f"https://dniruc.apisperu.com/api/v1/dni/{dni}?token=anonymous",
-    ]
-
     async with httpx.AsyncClient(timeout=10) as client:
-        for api_url in apis:
+        # ── Decolecta (primario) ──────────────────────────────────────
+        try:
+            resp = await client.get(
+                f"https://api.decolecta.com/api/padron-reducido-dni?dni={dni}",
+                headers={"Authorization": f"Bearer {DECOLECTA_KEY}"}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                nombre = (
+                    data.get("nombre_completo") or
+                    f"{data.get('nombres', '')} {data.get('apellidoPaterno', '')} {data.get('apellidoMaterno', '')}".strip() or
+                    f"{data.get('nombre', '')} {data.get('apellido_paterno', '')} {data.get('apellido_materno', '')}".strip()
+                )
+                if nombre and nombre.strip():
+                    return {"ok": True, "nombre": nombre.strip(), "dni": dni}
+        except Exception:
+            pass
+
+        # ── Fallback APIs públicas ────────────────────────────────────
+        for api_url in [
+            f"https://apiperu.dev/api/dni/{dni}",
+            f"https://dniruc.apisperu.com/api/v1/dni/{dni}?token=anonymous",
+        ]:
             try:
                 resp = await client.get(api_url)
                 if resp.status_code == 200:
@@ -394,13 +413,42 @@ async def consulta_ruc(ruc: str):
     if len(ruc) != 11 or not ruc.isdigit():
         return {"ok": False, "error": "RUC debe tener 11 dígitos"}
 
-    apis = [
-        f"https://apiperu.dev/api/ruc/{ruc}",
-        f"https://dniruc.apisperu.com/api/v1/ruc/{ruc}?token=anonymous",
-    ]
-
     async with httpx.AsyncClient(timeout=10) as client:
-        for api_url in apis:
+        # ── Decolecta (primario) ──────────────────────────────────────
+        try:
+            resp = await client.get(
+                f"https://api.decolecta.com/api/padron-reducido-ruc?ruc={ruc}",
+                headers={"Authorization": f"Bearer {DECOLECTA_KEY}"}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                razon = (
+                    data.get("razonSocial") or
+                    data.get("razon_social") or
+                    data.get("nombre_o_razon_social") or ""
+                )
+                direccion = (
+                    data.get("direccion") or
+                    data.get("direccionCompleta") or
+                    data.get("direccion_completa") or ""
+                )
+                if razon:
+                    return {
+                        "ok": True,
+                        "razon_social": razon,
+                        "direccion": direccion,
+                        "ruc": ruc,
+                        "estado": data.get("estado", ""),
+                        "condicion": data.get("condicion", "")
+                    }
+        except Exception:
+            pass
+
+        # ── Fallback APIs públicas ────────────────────────────────────
+        for api_url in [
+            f"https://apiperu.dev/api/ruc/{ruc}",
+            f"https://dniruc.apisperu.com/api/v1/ruc/{ruc}?token=anonymous",
+        ]:
             try:
                 resp = await client.get(api_url)
                 if resp.status_code == 200:

@@ -433,6 +433,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
               <button class="btn bs btn-sm" onclick="lookDni()">🔍</button>
             </div>
             <div id="dr" style="font-size:12px;margin-top:5px;color:var(--g600)">Sin DNI → "Cliente Final"</div>
+            <div id="dni-manual" style="display:none;margin-top:7px">
+              <label class="flbl" style="font-size:11px">Nombre del cliente (manual)</label>
+              <input class="fi" id="dni-nombre-manual" placeholder="Ingresa el nombre manualmente" style="margin-top:3px">
+            </div>
           </div>
           <div id="ff" style="display:none">
             <div class="fg"><label class="flbl">RUC del cliente</label>
@@ -2092,12 +2096,18 @@ function bStep(n){
   document.getElementById('s-bill').scrollTop=0;
 }
 
-function getCliente(){ if(ST.dt==='NOTA_VENTA'){ const nv=(document.getElementById('nv-cl')?.value||'').trim(); return nv||'Cliente Final'; } const raz=document.getElementById('razon')?.value; const dni=document.getElementById('dni')?.value; const dr=document.getElementById('dr'); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; return 'Cliente Final'; }
+function getCliente(){ if(ST.dt==='NOTA_VENTA'){ const nv=(document.getElementById('nv-cl')?.value||'').trim(); return nv||'Cliente Final'; } const raz=document.getElementById('razon')?.value; const dr=document.getElementById('dr'); const manual=(document.getElementById('dni-nombre-manual')?.value||'').trim(); if(raz && raz!=='') return raz; if(dr && dr.dataset.nombre) return dr.dataset.nombre; if(manual) return manual; return 'Cliente Final'; }
 
 async function lookDni(){
   const v=document.getElementById('dni').value.trim(), r=document.getElementById('dr');
-  if(v.length<8){ r.textContent='Sin DNI → "Cliente Final"'; r.style.color='var(--g600)'; r.dataset.nombre=''; return; }
+  const manualDiv=document.getElementById('dni-manual');
+  if(v.length<8){
+    r.textContent='Sin DNI → "Cliente Final"'; r.style.color='var(--g600)'; r.dataset.nombre='';
+    manualDiv.style.display='none'; document.getElementById('dni-nombre-manual').value='';
+    return;
+  }
   r.textContent='⟳ Consultando RENIEC...'; r.style.color='var(--g600)';
+  manualDiv.style.display='none';
   try {
     const resp = await fetch(`${BACKEND_URL}/api/consulta-dni/${v}`);
     const data = await resp.json();
@@ -2105,16 +2115,19 @@ async function lookDni(){
       r.textContent=`✓ ${data.nombre}`;
       r.style.color='var(--teal)';
       r.dataset.nombre=data.nombre;
+      manualDiv.style.display='none';
     } else {
-      r.textContent='⚠️ DNI no encontrado — se usará "Cliente Final"';
+      r.textContent='⚠️ DNI no encontrado — ingresa el nombre manualmente';
       r.style.color='var(--warn)';
       r.dataset.nombre='';
+      manualDiv.style.display='block';
+      setTimeout(()=>document.getElementById('dni-nombre-manual').focus(), 50);
     }
   } catch(e){
-    // Fallback offline: usar como "Cliente con DNI"
-    r.textContent=`DNI: ${v} (sin verificar — backend no disponible)`;
+    r.textContent='⚠️ Sin conexión — ingresa el nombre manualmente';
     r.style.color='var(--gold)';
     r.dataset.nombre='';
+    manualDiv.style.display='block';
   }
 }
 
@@ -2446,7 +2459,9 @@ function resetBill(){
   ST.cart=[]; ST.step=0; ST.dt='BOLETA'; ST.last=null; ST.disc=0; ST.courtesy=false;
   ['dni','ruc-cl','razon','dir-cl','wa-cl','wa-cl2','nv-cl'].forEach(id=>sv(id,''));
   const dr=document.getElementById('dr');
-  if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; }
+  if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; dr.style.color='var(--g600)'; }
+  const dm=document.getElementById('dni-manual'); if(dm) dm.style.display='none';
+  const dnm=document.getElementById('dni-nombre-manual'); if(dnm) dnm.value='';
   bStep(0); setDT('BOLETA'); renderCart();
   goTo('s-bill','bill');
 }
