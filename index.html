@@ -440,10 +440,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
           </div>
           <div id="ff" style="display:none">
             <div class="fg"><label class="flbl">RUC del cliente</label>
-              <div style="display:flex;gap:7px"><input class="fi" id="ruc-cl" placeholder="20XXXXXXXXX" maxlength="11" inputmode="numeric" style="flex:1"><button class="btn bs btn-sm" onclick="lookRuc()">🔍</button></div>
+              <div style="display:flex;gap:7px"><input class="fi" id="ruc-cl" placeholder="20XXXXXXXXX" maxlength="11" inputmode="numeric" style="flex:1" onblur="lookRuc()"><button class="btn bs btn-sm" onclick="lookRuc()">🔍</button></div>
+              <div id="rr" style="font-size:12px;margin-top:5px;color:var(--g600)"></div>
             </div>
             <div class="fr2">
-              <div class="fg"><label class="flbl">Razón Social</label><input class="fi" id="razon" placeholder="Autocompleta"></div>
+              <div class="fg"><label class="flbl">Razón Social</label><input class="fi" id="razon" placeholder="Autocompleta o ingresa manualmente"></div>
               <div class="fg"><label class="flbl">Dirección</label><input class="fi" id="dir-cl" placeholder="Av. Lima 123"></div>
             </div>
           </div>
@@ -2133,20 +2134,26 @@ async function lookDni(){
 
 async function lookRuc(){
   const v=document.getElementById('ruc-cl').value.trim();
-  if(v.length<11){ toast('Ingresa 11 dígitos'); return; }
-  toast('⟳ Consultando SUNAT...');
+  const rr=document.getElementById('rr');
+  if(v.length<11){
+    if(rr){ rr.textContent=''; }
+    return;
+  }
+  if(rr){ rr.textContent='⟳ Consultando SUNAT...'; rr.style.color='var(--g600)'; }
   try {
     const resp = await fetch(`${BACKEND_URL}/api/consulta-ruc/${v}`);
     const data = await resp.json();
     if(data.ok && data.razon_social){
       sv('razon', data.razon_social);
       sv('dir-cl', data.direccion || '');
-      toast(`✓ ${data.razon_social}`);
+      if(rr){ rr.textContent=`✓ ${data.razon_social}`; rr.style.color='var(--teal)'; }
     } else {
-      toast('⚠️ RUC no encontrado');
+      if(rr){ rr.textContent='⚠️ RUC no encontrado — ingresa la Razón Social manualmente'; rr.style.color='var(--warn)'; }
+      setTimeout(()=>document.getElementById('razon')?.focus(), 50);
     }
   } catch(e){
-    toast('⚠️ Error consultando RUC — verifica el backend');
+    if(rr){ rr.textContent='⚠️ Sin conexión — ingresa la Razón Social manualmente'; rr.style.color='var(--gold)'; }
+    setTimeout(()=>document.getElementById('razon')?.focus(), 50);
   }
 }
 
@@ -2462,6 +2469,7 @@ function resetBill(){
   if(dr){ dr.textContent='Sin DNI → "Cliente Final"'; dr.dataset.nombre=''; dr.style.color='var(--g600)'; }
   const dm=document.getElementById('dni-manual'); if(dm) dm.style.display='none';
   const dnm=document.getElementById('dni-nombre-manual'); if(dnm) dnm.value='';
+  const rr=document.getElementById('rr'); if(rr) rr.textContent='';
   bStep(0); setDT('BOLETA'); renderCart();
   goTo('s-bill','bill');
 }

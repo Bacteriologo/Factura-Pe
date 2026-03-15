@@ -368,7 +368,7 @@ async def consulta_dni(dni: str):
         # ── Decolecta (primario) ──────────────────────────────────────
         try:
             resp = await client.get(
-                f"https://api.decolecta.com/api/padron-reducido-dni?dni={dni}",
+                f"https://api.decolecta.com/v1/reniec/dni?numero={dni}",
                 headers={"Authorization": f"Bearer {DECOLECTA_KEY}"}
             )
             if resp.status_code == 200:
@@ -417,7 +417,7 @@ async def consulta_ruc(ruc: str):
         # ── Decolecta (primario) ──────────────────────────────────────
         try:
             resp = await client.get(
-                f"https://api.decolecta.com/api/padron-reducido-ruc?ruc={ruc}",
+                f"https://api.decolecta.com/v1/sunat/ruc?numero={ruc}",
                 headers={"Authorization": f"Bearer {DECOLECTA_KEY}"}
             )
             if resp.status_code == 200:
@@ -425,7 +425,8 @@ async def consulta_ruc(ruc: str):
                 razon = (
                     data.get("razonSocial") or
                     data.get("razon_social") or
-                    data.get("nombre_o_razon_social") or ""
+                    data.get("nombre_o_razon_social") or
+                    data.get("nombre") or ""
                 )
                 direccion = (
                     data.get("direccion") or
