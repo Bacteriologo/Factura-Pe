@@ -374,9 +374,8 @@ async def consulta_dni(dni: str):
             if resp.status_code == 200:
                 data = resp.json()
                 nombre = (
-                    data.get("nombre_completo") or
-                    f"{data.get('nombres', '')} {data.get('apellidoPaterno', '')} {data.get('apellidoMaterno', '')}".strip() or
-                    f"{data.get('nombre', '')} {data.get('apellido_paterno', '')} {data.get('apellido_materno', '')}".strip()
+                    data.get("full_name") or
+                    f"{data.get('first_last_name', '')} {data.get('second_last_name', '')} {data.get('first_name', '')}".strip()
                 )
                 if nombre and nombre.strip():
                     return {"ok": True, "nombre": nombre.strip(), "dni": dni}
