@@ -134,10 +134,11 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
 .flbl{display:block;font-size:10px;color:var(--g600);font-weight:600;letter-spacing:.05em;text-transform:uppercase;margin-bottom:5px}
 .fi{width:100%;padding:11px 13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border .2s;-webkit-appearance:none}
 .fi:focus{border-color:rgba(0,201,167,.5);background:rgba(0,201,167,.04);box-shadow:0 0 0 3px rgba(0,201,167,.1)}
-.pw-wrap{position:relative;display:flex;align-items:center}
-.pw-wrap .fi{padding-right:40px}
-.pw-eye{position:absolute;right:11px;background:none;border:none;cursor:pointer;color:var(--g600);font-size:17px;line-height:1;padding:4px;transition:color .15s;flex-shrink:0;user-select:none}
+.pw-wrap{position:relative;display:block}
+.pw-wrap .fi{padding-right:42px;width:100%}
+.pw-eye{position:absolute;right:0;top:0;bottom:0;width:40px;display:flex;align-items:center;justify-content:center;background:none;border:none;cursor:pointer;color:var(--g600);transition:color .15s;border-radius:0 10px 10px 0}
 .pw-eye:hover{color:var(--teal)}
+.pw-eye svg{pointer-events:none;display:block}
 .fi::placeholder{color:#2D4A7A}
 .fsel{width:100%;padding:11px 13px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:10px;color:var(--text);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;-webkit-appearance:none;cursor:pointer}
 .fsel option{background:var(--navy3)}
@@ -299,7 +300,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       <div class="fg"><label class="flbl">Correo electrónico</label>
         <input class="fi" id="in-email" type="email" placeholder="correo@empresa.com" inputmode="email" autocomplete="email"></div>
       <div class="fg"><label class="flbl">Contraseña</label>
-        <div class="pw-wrap"><input class="fi" id="in-pass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pw-eye" onclick="togglePw('in-pass',this)" tabindex="-1">👁</button></div></div>
+        <div class="pw-wrap"><input class="fi" id="in-pass" type="password" placeholder="••••••••" autocomplete="current-password"><button type="button" class="pw-eye" onclick="togglePw('in-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <button class="btn bp fw btn-lg" id="btn-in" onclick="doLogin()" style="margin-top:4px">Entrar →</button>
       <div style="text-align:center;margin-top:14px">
         <span style="font-size:12px;color:var(--g600);cursor:pointer" onclick="authTab('reset')">¿Olvidaste tu contraseña?</span>
@@ -309,13 +310,15 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
     <!-- REGISTER -->
     <div id="form-reg" style="display:none">
       <div class="fg"><label class="flbl">RUC de la empresa</label>
-        <input class="fi" id="reg-ruc" placeholder="20XXXXXXXXX" maxlength="11" inputmode="numeric"></div>
+        <div style="display:flex;gap:7px"><input class="fi" id="reg-ruc" placeholder="20XXXXXXXXX" maxlength="11" inputmode="numeric" style="flex:1" onblur="lookRucEmisor('reg-ruc','reg-nom','')"><button type="button" class="btn bs btn-sm" onclick="lookRucEmisor('reg-ruc','reg-nom','')">🔍</button></div>
+        <div id="reg-ruc-st" style="font-size:12px;margin-top:4px;color:var(--g600)"></div>
+      </div>
       <div class="fg"><label class="flbl">Nombre de la empresa</label>
-        <input class="fi" id="reg-nom" placeholder="Mi Empresa EIRL"></div>
+        <input class="fi" id="reg-nom" placeholder="Autocompleta o ingresa manualmente"></div>
       <div class="fg"><label class="flbl">Correo electrónico</label>
         <input class="fi" id="reg-email" type="email" placeholder="correo@empresa.com" inputmode="email"></div>
       <div class="fg"><label class="flbl">Contraseña</label>
-        <div class="pw-wrap"><input class="fi" id="reg-pass" type="password" placeholder="Mínimo 8 caracteres"><button type="button" class="pw-eye" onclick="togglePw('reg-pass',this)" tabindex="-1">👁</button></div></div>
+        <div class="pw-wrap"><input class="fi" id="reg-pass" type="password" placeholder="Mínimo 8 caracteres"><button type="button" class="pw-eye" onclick="togglePw('reg-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <button class="btn bp fw btn-lg" id="btn-reg" onclick="doRegister()" style="margin-top:4px">Crear cuenta →</button>
     </div>
 
@@ -599,18 +602,22 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
       </div>
 
       <div class="cfg-t">Datos de la Empresa</div>
-      <div class="fr2 fg">
-        <div><label class="flbl">RUC</label><input class="fi" id="c-ruc" placeholder="20XXXXXXXXX" inputmode="numeric" maxlength="11"></div>
-        <div><label class="flbl">Nombre</label><input class="fi" id="c-nom" placeholder="Mi Empresa EIRL"></div>
+      <div class="fg">
+        <label class="flbl">RUC</label>
+        <div style="display:flex;gap:7px"><input class="fi" id="c-ruc" placeholder="20XXXXXXXXX" inputmode="numeric" maxlength="11" style="flex:1" onblur="lookRucEmisor('c-ruc','c-nom','c-dir')"><button type="button" class="btn bs btn-sm" onclick="lookRucEmisor('c-ruc','c-nom','c-dir')">🔍</button></div>
+        <div id="c-ruc-st" style="font-size:12px;margin-top:4px;color:var(--g600)"></div>
       </div>
-      <div class="fg"><label class="flbl">Dirección fiscal</label><input class="fi" id="c-dir" placeholder="Jr. Lima 123, Lima"></div>
+      <div class="fr2 fg">
+        <div><label class="flbl">Nombre</label><input class="fi" id="c-nom" placeholder="Autocompleta o ingresa manualmente"></div>
+        <div><label class="flbl">Dirección fiscal</label><input class="fi" id="c-dir" placeholder="Jr. Lima 123, Lima"></div>
+      </div>
       <div class="fg"><label class="flbl">Ubigeo</label><input class="fi" id="c-ubi" placeholder="150101 - Lima, Lima, Lima"></div>
 
       <div class="cfg-t" style="margin-top:6px">Credenciales SUNAT / SOL</div>
       <div class="warn-b">⚠️ En producción estas credenciales van en el backend FastAPI cifradas.</div>
       <div class="fr2 fg">
         <div><label class="flbl">Usuario SOL</label><input class="fi" id="c-su" placeholder="RSUP001"></div>
-        <div><label class="flbl">Clave SOL</label><div class="pw-wrap"><input class="fi" id="c-sp" type="password" placeholder="••••••••"><button type="button" class="pw-eye" onclick="togglePw('c-sp',this)" tabindex="-1">👁</button></div></div>
+        <div><label class="flbl">Clave SOL</label><div class="pw-wrap"><input class="fi" id="c-sp" type="password" placeholder="••••••••"><button type="button" class="pw-eye" onclick="togglePw('c-sp',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       </div>
       <div class="fg"><label class="flbl">Entorno SUNAT</label>
         <select class="fsel" id="c-env" onchange="onEnvChange(this.value)"><option value="beta">🧪 Beta / Homologación</option><option value="prod">🟢 Producción</option></select>
@@ -629,7 +636,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--navy2);color:var(--text);
         </div>
         <div class="fg">
           <label class="flbl">Contraseña del certificado</label>
-          <div class="pw-wrap"><input class="fi" id="c-cert-pass" type="password" placeholder="••••••••"><button type="button" class="pw-eye" onclick="togglePw('c-cert-pass',this)" tabindex="-1">👁</button></div>
+          <div class="pw-wrap"><input class="fi" id="c-cert-pass" type="password" placeholder="••••••••"><button type="button" class="pw-eye" onclick="togglePw('c-cert-pass',this)" tabindex="-1"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button></div>
         </div>
         <button class="btn bp fw" onclick="subirCertificado()" style="margin-top:9px">
           📤 Cargar Certificado
@@ -2798,7 +2805,28 @@ if(ovCorr){
     }
   });
 }
-function togglePw(id, btn){ const el=document.getElementById(id); if(!el) return; const show=el.type==='password'; el.type=show?'text':'password'; btn.textContent=show?'🙈':'👁'; }
+const _EYE_O='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const _EYE_C='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+function togglePw(id,btn){ const el=document.getElementById(id); if(!el) return; const show=el.type==='password'; el.type=show?'text':'password'; btn.innerHTML=show?_EYE_C:_EYE_O; }
+async function lookRucEmisor(rucId,nomId,dirId){
+  const v=(document.getElementById(rucId)?.value||'').trim();
+  const st=document.getElementById(rucId+'-st');
+  if(v.length<11){ if(st) st.textContent=''; return; }
+  if(st){ st.textContent='⟳ Consultando SUNAT...'; st.style.color='var(--g600)'; }
+  try{
+    const resp=await fetch(`${BACKEND_URL}/api/consulta-ruc/${v}`);
+    const data=await resp.json();
+    if(data.ok && data.razon_social){
+      sv(nomId, data.razon_social);
+      if(dirId) sv(dirId, data.direccion||'');
+      if(st){ st.textContent=`✓ ${data.razon_social}`; st.style.color='var(--teal)'; }
+    } else {
+      if(st){ st.textContent='⚠️ RUC no encontrado — ingresa manualmente'; st.style.color='var(--warn)'; }
+    }
+  } catch(e){
+    if(st){ st.textContent='⚠️ Sin conexión — ingresa manualmente'; st.style.color='var(--gold)'; }
+  }
+}
 let _tt;
 function toast(msg, duration=2800){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove('show'), duration); }
 function showSuccess(title, sub){
