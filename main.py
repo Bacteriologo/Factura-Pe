@@ -990,10 +990,10 @@ async def enviar_sunat(url: str, ruc: str, usuario_sol: str, clave_sol: str,
     soap_xml = f"""<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
   xmlns:ser="http://service.sunat.gob.pe" xmlns:wsse="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd">
   <soapenv:Header>
-    <wsse:Security>
+    <wsse:Security soapenv:mustUnderstand="1">
       <wsse:UsernameToken>
         <wsse:Username>{ruc}{usuario_sol}</wsse:Username>
-        <wsse:Password>{clave_sol}</wsse:Password>
+        <wsse:Password Type="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-username-token-profile-1.0#PasswordText">{clave_sol}</wsse:Password>
       </wsse:UsernameToken>
     </wsse:Security>
   </soapenv:Header>
