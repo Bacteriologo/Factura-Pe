@@ -619,6 +619,28 @@ async def emitir_comprobante(
                     )
                 }, status_code=400)
 
+            if tipo == "NOTA_CREDITO":
+                if ref_tipo == "01" and not serie.upper().startswith("F"):
+                    return JSONResponse({
+                        "ok": False,
+                        "estado": "ERROR",
+                        "codigo": "1773_BETA",
+                        "error_sunat": (
+                            f"En el entorno BETA, la serie de NOTA DE CRÉDITO que modifica una FACTURA debe empezar con 'F' (ej: FC01). "
+                            f"Serie actual: '{serie}'."
+                        )
+                    }, status_code=400)
+                if ref_tipo == "03" and not serie.upper().startswith("B"):
+                    return JSONResponse({
+                        "ok": False,
+                        "estado": "ERROR",
+                        "codigo": "1773_BETA",
+                        "error_sunat": (
+                            f"En el entorno BETA, la serie de NOTA DE CRÉDITO que modifica una BOLETA debe empezar con 'B' (ej: BC01). "
+                            f"Serie actual: '{serie}'."
+                        )
+                    }, status_code=400)
+
         # Calcular montos
         base_imponible = round(total_num / 1.18, 2)
         igv = round(total_num - base_imponible, 2)
@@ -811,6 +833,7 @@ def generar_xml_ubl(ruc, tipo_doc, serie, numero, nombre_emisor, direccion_emiso
   </ext:UBLExtensions>
   <cbc:UBLVersionID>2.1</cbc:UBLVersionID>
   <cbc:CustomizationID>2.0</cbc:CustomizationID>
+  <cbc:ProfileID schemeAgencyName="PE:SUNAT" schemeURI="urn:pe:gob:sunat:cpe:see:gem:catalogos:catalogo17">0101</cbc:ProfileID>
   <cbc:ID>{serie}-{numero}</cbc:ID>
   <cbc:IssueDate>{fecha}</cbc:IssueDate>
   <cbc:IssueTime>{hora}</cbc:IssueTime>{type_code_xml}
